@@ -53,6 +53,10 @@
   .company-tab.active .ct-n{background:#1677ff;color:#fff}
   .tab-add{padding:5px 12px;border:1px dashed #d9d9d9;border-radius:8px;background:#fff;color:#8c8c8c;font-size:13px;cursor:pointer;transition:all .15s;white-space:nowrap}
   .tab-add:hover{color:#1677ff;border-color:#1677ff;border-style:solid;background:#f0f5ff}
+  .batch-bar{display:none;align-items:center;gap:8px;flex-wrap:wrap;background:#f0f5ff;border:1px solid #91caff;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:13px;color:#1677ff}
+  .batch-bar .bb-n{font-weight:600}
+  .rowchk{width:34px;text-align:center}
+  .rowchk input{width:16px;height:16px;cursor:pointer;vertical-align:middle;margin:0}
   /* ===== 内容区 ===== */
   main{max-width:1180px;margin:0 0 0 var(--sidebar-w);padding:calc(var(--topbar-h) + 56px) 28px 90px}
   .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px 24px;box-shadow:var(--shadow)}
@@ -402,16 +406,31 @@
     </div>
     <div class="panel" style="margin-bottom:18px">
       <h2>开出的发票 · 收款跟踪</h2>
+      <div class="batch-bar" id="tOutBar">
+        <span class="bb-n">已选 <b id="tOutSelN">0</b> 笔</span>
+        <button type="button" class="btn sm" data-batch="recv-done">标为已收</button>
+        <button type="button" class="btn sm ghost" data-batch="recv-none">标为未收</button>
+        <button type="button" class="btn sm ghost" data-batch="recv-date">收款日期=今天</button>
+        <button type="button" class="btn sm ghost" data-batch="recv-clear">清空收款日期</button>
+        <button type="button" class="btn sm ghost" data-batch="unsel">取消全选</button>
+      </div>
       <div class="tablewrap"><table>
-        <thead><tr><th>开票日期</th><th>发票号码</th><th>客户</th><th>类别</th>
+        <thead><tr><th style="width:34px"><input type="checkbox" id="tOutAll" title="全选/取消全选"></th><th>开票日期</th><th>发票号码</th><th>客户</th><th>类别</th>
           <th class="num">价税合计</th><th class="num">已收货款</th><th class="num">未收货款</th><th>收款状态</th>
           <th>收款日期</th><th>约定收款日</th><th>用途分类</th><th>备注</th></tr></thead>
         <tbody id="tOutBody"></tbody></table></div>
     </div>
     <div class="panel">
       <h2>收到的发票 · 付款跟踪</h2>
+      <div class="batch-bar" id="tInBar">
+        <span class="bb-n">已选 <b id="tInSelN">0</b> 笔</span>
+        <button type="button" class="btn sm" data-batch="pay-done">标为已付款</button>
+        <button type="button" class="btn sm ghost" data-batch="pay-none">标为待付款</button>
+        <button type="button" class="btn sm ghost" data-batch="pay-clear">清空付款日期</button>
+        <button type="button" class="btn sm ghost" data-batch="unsel">取消全选</button>
+      </div>
       <div class="tablewrap"><table>
-        <thead><tr><th>开票日期</th><th>发票号码</th><th>供应商</th><th>类别</th>
+        <thead><tr><th style="width:34px"><input type="checkbox" id="tInAll" title="全选/取消全选"></th><th>开票日期</th><th>发票号码</th><th>供应商</th><th>类别</th>
           <th class="num">价税合计</th><th>付款状态</th><th>付款日期</th><th class="num">未付金额</th>
           <th>用途分类</th><th>备注</th></tr></thead>
         <tbody id="tInBody"></tbody></table></div>
@@ -850,6 +869,7 @@ $('companyManageBtn').addEventListener('click',openCompanyModal);
   }
 
   /* ---------- 收付款跟踪 ---------- */
+  let selOut=new Set(),selIn=new Set();
   function payStatus(r){
     const recv=Number(r.received)||0, total=Number(r.total)||0;
     const today=new Date().toISOString().slice(0,10);
@@ -873,13 +893,13 @@ $('companyManageBtn').addEventListener('click',openCompanyModal);
       const recv=Number(r.received)||0, total=Number(r.total)||0, unpaid=Math.max(0,total-recv);
       outRecv+=recv; outUnpaid+=unpaid; if(unpaid>0.005)outUnpaidCnt++;
       const ps=payStatus(r);
-      return `<tr><td>${r.date||''}</td><td>${r.number}</td><td>${escapeHtml(r.party)}</td><td>${escapeHtml(r.category)}</td>
+      return `<tr><td class="rowchk"><input type="checkbox" class="rowbox" data-id="${r.id}"></td><td>${r.date||''}</td><td>${r.number}</td><td>${escapeHtml(r.party)}</td><td>${escapeHtml(r.category)}</td>
         <td class="num">${fmt(total)}</td><td class="num">${fmt(recv)}</td><td class="num" style="color:var(--out)">${fmt(unpaid)}</td>
         <td><span class="tag ${ps.cls}" style="cursor:pointer" data-tog="recv" data-id="${r.id}" title="点击切换：未收→部分→已收">${ps.k}</span></td>
         <td>${r.payDate||'—'}</td><td>${r.dueDate||'—'}</td><td>${escapeHtml(r.payCategory)||'—'}</td>
         <td><a class="noteLink${r.payNote?'':' empty'}" data-note="${r.id}" title="点击编辑备注">${r.payNote?escapeHtml(r.payNote.slice(0,20)):'＋备注'}</a></td></tr>`;
     }).join('');
-    $('tOutBody').innerHTML=ob||'<tr><td colspan="12" class="empty">暂无销项发票</td></tr>';
+    $('tOutBody').innerHTML=ob||'<tr><td colspan="13" class="empty">暂无销项发票</td></tr>';
     $('tOutTotal').textContent=money(outTotal);
     $('tOutRecv').textContent=money(outRecv);
     $('tOutRecvPct').textContent='已收 '+ (outTotal? Math.round(outRecv/outTotal*100):0) +'%';
@@ -890,18 +910,59 @@ $('companyManageBtn').addEventListener('click',openCompanyModal);
       const total=Number(r.total)||0; const rs=reimbStatus(r);
       const unreimb=rs.k==='已付款'?0:total;
       inUnpaid+=unreimb; if(unreimb>0.005)inUnpaidCnt++;
-      return `<tr><td>${r.date||''}</td><td>${r.number}</td><td>${escapeHtml(r.party)}</td><td>${escapeHtml(r.category)}</td>
+      return `<tr><td class="rowchk"><input type="checkbox" class="rowbox" data-id="${r.id}"></td><td>${r.date||''}</td><td>${r.number}</td><td>${escapeHtml(r.party)}</td><td>${escapeHtml(r.category)}</td>
         <td class="num">${fmt(total)}</td><td><span class="tag ${rs.cls}" style="cursor:pointer" data-tog="pay" data-id="${r.id}" title="点击切换：待付/已付">${rs.k}</span></td>
         <td>${r.reimbursedAt||'—'}</td><td class="num" style="color:var(--warn)">${fmt(unreimb)}</td>
         <td>${escapeHtml(r.payCategory)||'—'}</td>
         <td><a class="noteLink${r.payNote?'':' empty'}" data-note="${r.id}" title="点击编辑备注">${r.payNote?escapeHtml(r.payNote.slice(0,20)):'＋备注'}</a></td></tr>`;
     }).join('');
-    $('tInBody').innerHTML=ib||'<tr><td colspan="10" class="empty">暂无进项发票</td></tr>';
+    $('tInBody').innerHTML=ib||'<tr><td colspan="11" class="empty">暂无进项发票</td></tr>';
     $('tInUnreimb').textContent=money(inUnpaid);
     $('tInUnreimbCnt').textContent=inUnpaidCnt+' 笔待付款';
     document.querySelectorAll('#tOutBody [data-tog]').forEach(el=>el.onclick=()=>toggleRecv(el.dataset.id));
     document.querySelectorAll('#tInBody [data-tog]').forEach(el=>el.onclick=()=>togglePay(el.dataset.id));
     document.querySelectorAll('#tOutBody [data-note],#tInBody [data-note]').forEach(el=>el.onclick=()=>openNoteModal(el.dataset.note));
+    const syncBar=()=>{
+      $('tOutSelN').textContent=selOut.size;
+      $('tOutBar').style.display=selOut.size?'flex':'none';
+      $('tOutAll').checked=selOut.size>0&&selOut.size===out.length;
+      $('tInSelN').textContent=selIn.size;
+      $('tInBar').style.display=selIn.size?'flex':'none';
+      $('tInAll').checked=selIn.size>0&&selIn.size===inc.length;
+    };
+    document.querySelectorAll('#tOutBody .rowbox').forEach(cb=>{
+      cb.checked=selOut.has(cb.dataset.id);
+      cb.onchange=()=>{if(cb.checked)selOut.add(cb.dataset.id);else selOut.delete(cb.dataset.id);syncBar();};
+    });
+    document.querySelectorAll('#tInBody .rowbox').forEach(cb=>{
+      cb.checked=selIn.has(cb.dataset.id);
+      cb.onchange=()=>{if(cb.checked)selIn.add(cb.dataset.id);else selIn.delete(cb.dataset.id);syncBar();};
+    });
+    $('tOutAll').onchange=()=>{out.forEach(r=>{$('tOutAll').checked?selOut.add(r.id):selOut.delete(r.id);});renderTrack();};
+    $('tInAll').onchange=()=>{inc.forEach(r=>{$('tInAll').checked?selIn.add(r.id):selIn.delete(r.id);});renderTrack();};
+    const doBatch=(kind,act)=>{
+      const set=kind==='out'?selOut:selIn;
+      const rows=records.filter(r=>set.has(r.id));
+      if(!rows.length)return;
+      const today=new Date().toISOString().slice(0,10);
+      const names={'recv-done':'将所选销项标为已收（金额自动填满）','recv-none':'将所选销项标为未收','recv-date':'给所选销项填收款日期为今天','recv-clear':'清空所选销项的收款日期','pay-done':'将所选进项标为已付款（填今天日期）','pay-none':'将所选进项标为待付款','pay-clear':'清空所选进项的付款日期'}[act];
+      if(!names||!confirm(names+'（共 '+rows.length+' 笔）？'))return;
+      rows.forEach(r=>{
+        if(act==='recv-done')r.received=Number(r.total)||0;
+        else if(act==='recv-none')r.received=0;
+        else if(act==='recv-date')r.payDate=today;
+        else if(act==='recv-clear')r.payDate='';
+        else if(act==='pay-done')r.reimbursedAt=today;
+        else if(act==='pay-none')r.reimbursedAt='';
+        else if(act==='pay-clear')r.reimbursedAt='';
+      });
+      set.clear();
+      save();renderTrack();renderOverview();renderList();
+      toast('已批量更新 '+rows.length+' 笔');
+    };
+    document.querySelectorAll('#tOutBar [data-batch]').forEach(b=>b.onclick=()=>{const a=b.dataset.batch;if(a==='unsel'){selOut.clear();renderTrack();}else doBatch('out',a);});
+    document.querySelectorAll('#tInBar [data-batch]').forEach(b=>b.onclick=()=>{const a=b.dataset.batch;if(a==='unsel'){selIn.clear();renderTrack();}else doBatch('in',a);});
+    syncBar();
   }
   function toggleRecv(id){ openStModal('recv',id); }
   function togglePay(id){ openStModal('pay',id); }
@@ -1678,7 +1739,7 @@ $('companyManageBtn').addEventListener('click',openCompanyModal);
   resetForm();resetLedgerForm();renderOverview();renderLedger();renderTrack();
 })();
 (function checkUpdate(){
-  var APP_VERSION='v18';
+  var APP_VERSION='v19';
   try{
     fetch(location.pathname+'?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(t){
       var m=t.match(/版本 v(\d+)/);
@@ -1694,6 +1755,6 @@ $('companyManageBtn').addEventListener('click',openCompanyModal);
   }catch(e){}
 })();
 </script>
-<div style="position:fixed;right:10px;bottom:8px;font-size:11px;color:var(--muted);opacity:.75;z-index:999">版本 v18（2026-08-22 23:50）</div>
+<div style="position:fixed;right:10px;bottom:8px;font-size:11px;color:var(--muted);opacity:.75;z-index:999">版本 v19（2026-08-23 00:15）</div>
 </body>
 </html>
