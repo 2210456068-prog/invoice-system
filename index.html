@@ -1,0 +1,1692 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>发票管理系统 · 小公司财务</title>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#ffffff; --ink:#1f2329; --muted:#8c8c8c;
+    --line:#e8e8e8; --brand:#1677ff; --brand-2:#4096ff; --brand-soft:#e6f4ff;
+    --out:#f5222d; --out-soft:#fff1f0;
+    --in:#13c2c2; --in-soft:#e6fffb;
+    --warn:#fa8c16; --ok:#52c41a;
+    --shadow-sm:0 1px 2px rgba(16,24,40,.05);
+    --shadow:0 1px 3px rgba(16,24,40,.04),0 6px 20px rgba(16,24,40,.05);
+    --shadow-lg:0 12px 40px rgba(16,24,40,.12);
+    --sidebar-w:212px; --topbar-h:56px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif;
+       background:var(--bg);color:var(--ink);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  /* ===== 左侧固定菜单栏 ===== */
+  nav{position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);background:#fff;border-right:1px solid var(--line);
+      display:flex;flex-direction:column;padding:18px 12px 12px;gap:2px;z-index:50;overflow-y:auto}
+  nav::before{content:"发票管理系统";display:block;padding:2px 10px 18px;font-size:16px;font-weight:800;color:#1d2129;letter-spacing:.3px}
+  nav .nav-g{font-size:11px;color:#b0b7c3;font-weight:600;padding:14px 10px 6px;letter-spacing:.5px;user-select:none}
+  nav button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:none;background:transparent;
+             padding:10px 14px;font-size:13.5px;color:#6b7280;cursor:pointer;border-radius:10px;font-weight:500;transition:all .15s}
+  nav button:hover{background:#f2f3f7;color:#1d2129}
+  nav button.active{background:var(--brand-soft);color:#1677ff;font-weight:600}
+  nav::after{content:"数据仅保存在本机浏览器";display:block;margin-top:auto;padding:12px 10px 2px;font-size:11px;color:#b4bac6}
+  /* ===== 顶部工具条（右侧） ===== */
+  header{position:fixed;top:0;left:var(--sidebar-w);right:0;height:var(--topbar-h);background:#fff;border-bottom:1px solid var(--line);
+         display:flex;align-items:center;justify-content:space-between;padding:0 26px;z-index:40}
+  header h1{margin:0;font-size:16px;font-weight:800;color:#1d2129;display:flex;align-items:center;gap:10px;letter-spacing:.2px}
+  header h1::before{content:"票";display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#1677ff,#4096ff);color:#fff;font-size:14px;font-weight:700;box-shadow:0 2px 8px rgba(22,119,255,.35);flex:none}
+  header p{margin:0;font-size:12px;color:#9aa1ad}
+  #companyBar{position:fixed;top:var(--topbar-h);left:var(--sidebar-w);right:0;padding:9px 26px;background:#fff;border-bottom:1px solid var(--line);
+              z-index:40;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  #companyBar .lbl{color:var(--muted);font-size:12.5px}
+  #companyBar select{font-size:13px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#1d2129}
+  #companyBar .cur{font-weight:600;color:#1677ff;font-size:12px;background:var(--brand-soft);padding:3px 10px;border-radius:999px}
+  /* ===== 内容区 ===== */
+  main{max-width:1180px;margin:0 0 0 var(--sidebar-w);padding:calc(var(--topbar-h) + 56px) 28px 90px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px 24px;box-shadow:var(--shadow)}
+  .view{display:none}
+  .view.active{display:block}
+  h2{font-size:15px;margin:0 0 16px;font-weight:700;color:#1d2129}
+  label{display:block;font-size:12px;color:#6b7280;margin:0 0 6px;font-weight:500}
+  input,select,textarea{width:100%;padding:9px 12px;border:1px solid #e4e6eb;border-radius:10px;font-size:14px;
+            background:#fff;color:#1d2129;font-family:inherit;transition:border-color .15s,box-shadow .15s}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(22,119,255,.14)}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .grid-2{grid-template-columns:repeat(2,1fr)}
+  .field{margin-bottom:4px}
+  .seg{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .seg label{flex:1;margin:0;cursor:pointer}
+  .seg input{display:none}
+  .seg span{display:block;text-align:center;padding:10px;border:1px solid #e4e6eb;border-radius:11px;font-weight:600;color:var(--muted);background:#fff;transition:all .15s}
+  .seg label:hover span{border-color:#91caff;color:var(--brand)}
+  .seg input:checked + span.out{background:var(--out-soft);border-color:var(--out);color:var(--out)}
+  .seg input:checked + span.in{background:var(--in-soft);border-color:var(--in);color:var(--in)}
+  .btn{border:none;border-radius:10px;padding:9px 18px;font-size:13.5px;font-weight:600;cursor:pointer;color:#fff;background:var(--brand);box-shadow:0 1px 2px rgba(16,24,40,.06);transition:background .15s,transform .06s}
+  .btn:hover{background:#1677ff}
+  .btn:active{transform:translateY(1px)}
+  .btn.ghost{background:#fff;color:#1677ff;border:1px solid #91caff}
+  .btn.ghost:hover{background:var(--brand-soft);border-color:var(--brand)}
+  .btn.warn{background:var(--warn)}
+  .btn.warn:hover{background:#d97a06}
+  .btn.sm{padding:5px 12px;font-size:12px;border-radius:8px}
+  .btn.danger{background:#e5484d}
+  .btn.danger:hover{background:#d13438}
+  .btn:disabled{opacity:.5;cursor:not-allowed;pointer-events:none}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  .calc{background:linear-gradient(135deg,#edf2ff,#eaf1ff);border:1px dashed #91caff;border-radius:11px;padding:10px 14px;margin-top:8px;font-size:13px;color:#1677ff;font-weight:600}
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+  .card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px 14px;box-shadow:var(--shadow);overflow:hidden;transition:transform .15s,box-shadow .15s}
+  .card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
+  .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px}
+  .card.out::before{background:var(--out)} .card.in::before{background:var(--in)} .card.net::before{background:var(--brand)}
+  .card .t{font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:500;letter-spacing:.2px}
+  .card .v{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.4px;line-height:1.4;padding:4px 0 2px;word-break:break-all;overflow-wrap:break-word}
+  .card.out .v{color:var(--out)} .card.in .v{color:var(--in)} .card.net .v{color:var(--brand)}
+  .card .s{font-size:12px;color:var(--muted);margin-top:8px}
+  table{width:100%;min-width:1080px;border-collapse:collapse;font-size:13px}
+  th,td{padding:11px 12px;text-align:left;border-bottom:1px solid #f0f1f4;overflow-wrap:break-word}
+  th{background:#fafbfc;color:#6b7280;font-weight:600;position:sticky;top:0;font-size:12px;letter-spacing:.1px}
+  tbody tr{transition:background .12s}
+  tbody tr:hover{background:#f8f9fc}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tag{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;line-height:1.45;white-space:nowrap}
+  .tag.out{background:var(--out-soft);color:#d13438}
+  .tag.in{background:var(--in-soft);color:#0b8f67}
+  .tag.wait{background:#fff4d6;color:#b45309}
+  .tag.done{background:#e6f9ee;color:#15803d}
+  .tag.void{background:#f1f3f7;color:#8a9099}
+  .tag.over{background:#ffe9e9;color:#c92a2a}
+  .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .filters .field{min-width:140px;margin:0}
+  .tablewrap{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+  .tablewrap::-webkit-scrollbar{width:8px;height:8px}
+  .tablewrap::-webkit-scrollbar-thumb{background:#d9dce3;border-radius:4px}
+  .tablewrap::-webkit-scrollbar-thumb:hover{background:#bfc3cd}
+  .empty{text-align:center;color:var(--muted);padding:44px 0}
+  #chart,#lChart{width:100%;height:340px}
+  #warnBar{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  #warnBar .wb{flex:1;min-width:220px;display:flex;align-items:center;gap:12px;border-radius:12px;padding:13px 16px;font-size:13px;cursor:pointer;border:1px solid;transition:transform .15s}
+  #warnBar .wb:hover{transform:translateY(-2px)}
+  #warnBar .wb .n{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+  #warnBar .wb .l{font-size:12px;opacity:.85;line-height:1.4}
+  #warnBar .wb.over{background:#fff1f0;border-color:#ffa39e;color:#cf1322}
+  #warnBar .wb.pay{background:#fff7e6;border-color:#ffd591;color:#d46b08}
+  #warnBar .wb.recv{background:#e6f4ff;border-color:#91caff;color:#0958d9}
+  .hint{font-size:12.5px;color:#6b7280;background:#f6f9ff;border:1px solid #e0e8f8;border-radius:10px;padding:10px 30px 10px 14px;margin-top:16px;position:relative;cursor:pointer;line-height:1.7;user-select:none;transition:background .15s}
+  .hint:hover{background:#f0f5ff}
+  .hint::before{content:"i";display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#1677ff;color:#fff;font-size:10px;font-weight:700;margin-right:7px;vertical-align:-2px;flex:none}
+  .hint::after{content:"▲";position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:9px;color:#91caff}
+  .hint.folded{max-height:2.8em;overflow:hidden}
+  .hint.folded::after{content:"▼"}
+  .help details{border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:10px;background:#fff}
+  .help summary{cursor:pointer;font-weight:600;color:#1f2329;font-size:13.5px;user-select:none}
+  .help details[open] summary{margin-bottom:6px}
+  .help details ol{margin:0;padding-left:20px}
+  .help li{margin-bottom:9px}
+  .help code{background:#f1f3fa;padding:2px 7px;border-radius:6px;font-size:12.5px;color:#1677ff}
+  .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(10px);background:#1d2129;color:#fff;padding:11px 22px;
+         border-radius:12px;font-size:13.5px;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:99;box-shadow:var(--shadow-lg)}
+  .toast.show{opacity:.95;transform:translateX(-50%) translateY(0)}
+  .modal-mask{position:fixed;inset:0;background:rgba(23,29,48,.45);display:none;align-items:center;justify-content:center;z-index:200;padding:16px;backdrop-filter:blur(3px)}
+  .modal{background:#fff;border-radius:20px;max-width:460px;width:100%;padding:22px 24px;box-shadow:var(--shadow-lg);animation:pop .18s ease-out}
+  @keyframes pop{from{transform:scale(.96);opacity:.6}to{transform:scale(1);opacity:1}}
+  .modal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .modal-h h3{margin:0;font-size:16px;font-weight:700}
+  .modal-h .x{border:none;background:none;font-size:24px;line-height:1;cursor:pointer;color:var(--muted);transition:color .15s}
+  .modal-h .x:hover{color:var(--ink)}
+  .modal-f{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+  .cmpEditBtn{cursor:pointer;transition:color .15s}
+  .cmpEditBtn:hover{color:var(--brand)}
+  .seg button{border:1px solid #e0e3ea;background:#fff;padding:7px 15px;border-radius:10px;font-size:13px;cursor:pointer;color:#5c6577;font-weight:500;transition:all .15s}
+  .seg button:hover{border-color:#91caff;color:var(--brand)}
+  .seg button.active{background:var(--brand);color:#fff;border-color:var(--brand);box-shadow:0 2px 8px rgba(22,119,255,.3)}
+  .noteLink{color:#1677ff;cursor:pointer;text-decoration:none;border-bottom:1px dashed #91caff}
+  .noteLink:hover{color:#0958d9}
+  .noteLink.empty{color:#bfbfbf;border-color:#d9d9d9}
+  /* ===== 手机端：恢复顶部导航 ===== */
+  @media(max-width:900px){
+    nav{position:static;width:auto;flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--line);padding:8px 12px}
+    nav::before,nav::after{display:none}
+    nav button{width:auto;padding:7px 13px}
+    header{position:static;height:auto;padding:14px 16px 10px;display:block}
+    header p{margin:2px 0 0 40px}
+    #companyBar{position:static;padding:8px 16px}
+    main{margin-left:0;padding:16px 12px 70px}
+  }
+  @media(max-width:820px){.grid,.grid-2,.cards{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>发票管理系统</h1>
+  <p id="crumb">当前位置：概览</p>
+</header>
+  <nav>
+    <div class="nav-g">总览</div>
+    <button data-view="overview" class="active">概览</button>
+    <div class="nav-g">录入</div>
+    <button data-view="entry">录入发票</button>
+    <button data-view="quick">快速录入</button>
+    <div class="nav-g">数据</div>
+    <button data-view="list">发票列表</button>
+    <button data-view="ledger">记账台账</button>
+    <button data-view="track">收付款跟踪</button>
+    <div class="nav-g">系统</div>
+    <button data-view="data">数据备份</button>
+    <button data-view="help">使用说明</button>
+  </nav>
+
+  <div id="companyBar">
+    <span class="lbl">当前查看：</span>
+    <select id="companySel"></select>
+    <button class="btn ghost sm" id="companyManageBtn" type="button">管理公司</button>
+    <span class="cur" id="companyCur"></span>
+  </div>
+
+  <main>
+  <!-- 概览 -->
+  <section id="overview" class="view active">
+    <div class="cards">
+      <div class="card out"><div class="t">销项（开出的票）</div><div class="v" id="kOutAmt">¥0</div><div class="s" id="kOutTax">税额 ¥0</div></div>
+      <div class="card in"><div class="t">进项（收到的票）</div><div class="v" id="kInAmt">¥0</div><div class="s" id="kInTax">税额 ¥0</div></div>
+      <div class="card net"><div class="t">应交增值税（估算）</div><div class="v" id="kVat">¥0</div><div class="s">销项税 − 进项税</div></div>
+      <div class="card"><div class="t">发票张数</div><div class="v" id="kCount">0</div><div class="s" id="kMonth">本月新增 0</div></div>
+    </div>
+    <div id="warnBar" style="display:none"></div>
+    <div class="panel">
+      <h2>月度 收入（销项） vs 支出（进项） · 价税合计</h2>
+      <div class="chart" id="chart"></div>
+
+      <div class="hint folded">说明：已内置税务口径——作废归零、红字负数冲减、被红冲原票不计，避免重复；「应交增值税」按纳税人类型计算（小规模＝销项有效税额，进项不抵扣；一般＝销项税 − 进项税）。正式申报请以税务师/申报表为准。</div>
+    </div>
+  </section>
+
+  <!-- 录入 -->
+  <section id="entry" class="view">
+    <div class="panel">
+      <h2 id="formTitle">录入一张发票</h2>
+      <div class="field" style="grid-column:1/-1"><label>所属公司（选现有，或输入新增）</label><div class="row" style="gap:6px"><input id="fCompany" list="companyOptions" placeholder="选择或输入公司名" style="flex:1"><button class="btn ghost sm cmpEditBtn" type="button" title="重命名 / 管理公司">✎</button></div></div>
+      <div class="seg">
+        <label><input type="radio" name="type" value="销项" checked><span class="out">开出的发票（销项 / 收入）</span></label>
+        <label><input type="radio" name="type" value="进项"><span class="in">收到的发票（进项 / 采购）</span></label>
+      </div>
+      <div class="grid">
+        <div class="field"><label>发票号码</label><input id="fNumber" placeholder="如 24417000000123456789"></div>
+        <div class="field"><label>开票日期</label><input id="fDate" type="date"></div>
+        <div class="field"><label id="lblParty">客户名称</label><input id="fParty" placeholder="对方单位名称"></div>
+        <div class="field"><label>对方税号（可选）</label><input id="fTaxId" placeholder="统一社会信用代码"></div>
+        <div class="field"><label>类别 / 货物服务</label><input id="fCategory" placeholder="如 咨询服务费 / 办公用品"></div>
+        <div class="field"><label>税率（%）</label>
+          <select id="fRate"><option value="13">13%</option><option value="9">9%</option><option value="6" selected>6%</option><option value="3">3%</option><option value="1">1%</option><option value="0">0%</option><option value="other">自定义</option></select>
+        </div>
+        <div class="field" id="rateCustomWrap" style="display:none"><label>自定义税率（%）</label><input id="fRateCustom" type="number" step="0.01" placeholder="如 5"></div>
+        <div class="field"><label>不含税金额（¥）</label><input id="fAmount" type="number" step="0.01" placeholder="0.00"></div>
+        <div class="field"><label>业务状态</label>
+          <select id="fStatus"><option value="待处理">待处理</option><option value="已完成">已完成</option></select>
+        </div>
+        <div class="field"><label>税务状态</label>
+          <select id="fTaxStatus"><option value="正常">正常（蓝字有效）</option><option value="作废">已作废（归零）</option><option value="红字">红字（负数冲减）</option><option value="已红冲">已红冲（原蓝字，不计）</option></select>
+        </div>
+        <div class="field"><label>备注（可选）</label><input id="fRemark" placeholder=""></div>
+      </div>
+      <div class="calc" id="calcBox">税额：¥0.00 ｜ 价税合计：¥0.00</div>
+      <div class="track" id="trackInputs" style="margin-top:14px;border-top:1px dashed var(--line);padding-top:14px">
+        <div id="outTrack">
+          <div class="field" style="margin-bottom:8px"><label>收款状态（点选）</label>
+            <div class="seg" id="recvStatusWrap">
+              <button type="button" class="seg-btn" data-recv="未收">未收</button>
+              <button type="button" class="seg-btn" data-recv="部分">部分</button>
+              <button type="button" class="seg-btn" data-recv="已收">已收</button>
+            </div>
+          </div>
+          <label>已收货款金额（¥）</label>
+          <div class="grid-2">
+            <div class="field"><input id="fReceived" type="number" step="0.01" placeholder="已收到的货款，0 表示未收"></div>
+            <div class="field" style="display:flex;align-items:flex-end"><button class="btn ghost sm" id="collectBtn" type="button">从收付款台账自动归集</button></div>
+          </div>
+          <div class="grid-2" style="margin-top:8px">
+            <div class="field"><label>收款日期（可选）</label><input id="fPayDate" type="date"></div>
+            <div class="field"><label>约定收款日（可选，超期标红）</label><input id="fDueDate" type="date"></div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label>收款用途分类（点击选择或输入新分类）</label><input id="fPayCat" list="payCatList" placeholder="点击下拉选择，或直接输入新分类"></div>
+            <div class="field"><label>收款备注（点击选择或输入）</label><input id="fPayNote" list="payNoteList" placeholder="点击下拉选择，或直接输入"></div>
+          </div>
+          <div class="hint" style="margin-top:8px">「自动归集」会把记账台账里“关联发票＝本发票号”的【收入】记录金额自动汇总到“已收货款”，省去手动填。</div>
+        </div>
+        <div id="inTrack" style="display:none">
+          <div class="field" style="margin-bottom:8px"><label>付款状态（点选）</label>
+            <div class="seg" id="payStatusWrap">
+              <button type="button" class="seg-btn" data-pay="待付">待付</button>
+              <button type="button" class="seg-btn" data-pay="已付">已付</button>
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:8px"><label>付款日期（填了＝已付款）</label><input id="fReimbursedAt" type="date"></div>
+          <div class="grid-2">
+            <div class="field"><label>付款用途分类（点击选择或输入新分类）</label><input id="fPayCatIn" list="payCatList" placeholder="点击下拉选择，或直接输入新分类"></div>
+            <div class="field"><label>付款备注（点击选择或输入）</label><input id="fPayNoteIn" list="payNoteList" placeholder="点击下拉选择，或直接输入"></div>
+          </div>
+        </div>
+      </div>
+      <datalist id="payCatList"></datalist>
+      <datalist id="payNoteList"></datalist>
+      <div class="row">
+        <button class="btn" id="saveBtn">保存发票</button>
+        <button class="btn ghost" id="resetBtn">清空</button>
+        <button class="btn danger" id="cancelEdit" style="display:none">取消编辑</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 列表 -->
+  <section id="list" class="view">
+    <div class="panel">
+      <h2>发票列表</h2>
+      <div class="filters">
+        <div class="field"><label>类型</label><select id="flType"><option value="">全部</option><option value="销项">销项</option><option value="进项">进项</option></select></div>
+        <div class="field"><label>状态</label><select id="flStatus"><option value="">全部</option><option value="待处理">待处理</option><option value="已完成">已完成</option><option value="已作废">已作废</option></select></div>
+        <div class="field"><label>起始日期</label><input id="flFrom" type="date"></div>
+        <div class="field"><label>结束日期</label><input id="flTo" type="date"></div>
+        <div class="field"><label>备注分类</label><select id="flNote"><option value="">全部备注</option></select></div>
+        <div class="field" style="flex:1;min-width:180px"><label>搜索（号码/对方/类别）</label><input id="flKw" placeholder="输入关键字"></div>
+        <div class="field" style="min-width:auto"><label>&nbsp;</label><button class="btn ghost sm" id="flReset">重置</button></div>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr>
+            <th>日期</th><th>类型</th><th>发票号码</th><th>对方名称</th><th>类别</th>
+            <th class="num">不含税</th><th class="num">税额</th><th class="num">价税合计</th><th>状态</th><th>收/付款</th><th>操作</th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 记账台账 -->
+  <section id="ledger" class="view">
+    <div class="cards">
+      <div class="card in"><div class="t">总收入</div><div class="v" id="lIn">¥0</div></div>
+      <div class="card out"><div class="t">总支出</div><div class="v" id="lOut">¥0</div></div>
+      <div class="card net"><div class="t">净收支</div><div class="v" id="lNet">¥0</div></div>
+      <div class="card"><div class="t">记录笔数</div><div class="v" id="lCount">0</div></div>
+    </div>
+    <div class="panel" style="margin-bottom:18px">
+      <h2 id="lFormTitle">记一笔收支</h2>
+      <div class="field"><label>所属公司（选现有，或输入新增）</label><div class="row" style="gap:6px"><input id="lCompany" list="companyOptions" placeholder="选择或输入公司名" style="flex:1"><button class="btn ghost sm cmpEditBtn" type="button" title="重命名 / 管理公司">✎</button></div></div>
+      <div class="seg">
+        <label><input type="radio" name="lio" value="收入" checked><span class="in">收入（收钱）</span></label>
+        <label><input type="radio" name="lio" value="支出"><span class="out">支出（付钱）</span></label>
+      </div>
+      <div class="grid">
+        <div class="field"><label>日期</label><input id="lDate" type="date"></div>
+        <div class="field"><label>账户</label><select id="lAccount">
+          <option value="银行账户">银行账户</option><option value="现金">现金</option>
+          <option value="微信">微信</option><option value="支付宝">支付宝</option></select></div>
+        <div class="field"><label>类别</label><input id="lCategory" list="lCatList" placeholder="如 工资薪金 / 办公费（可输入新类别）"><datalist id="lCatList"></datalist></div>
+        <div class="field"><label>对方（可选）</label><input id="lParty" list="lPartyList" placeholder="付款/收款对象（可输入新对象）"><datalist id="lPartyList"></datalist></div>
+        <div class="field"><label>金额（¥）</label><input id="lAmount" type="number" step="0.01" placeholder="0.00"></div>
+        <div class="field"><label>关联发票号码（可选）</label><input id="lInvoice" placeholder="对应发票号"></div>
+        <div class="field" style="grid-column:1/-1"><label>备注（可选）</label><input id="lRemark" placeholder=""></div>
+      </div>
+      <div class="row">
+        <button class="btn" id="lSave">保存</button>
+        <button class="btn ghost" id="lReset">清空</button>
+        <button class="btn danger" id="lCancel" style="display:none">取消编辑</button>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <h2>批量导入收支</h2>
+      <div class="hint">格式（每行一条，逗号或 Tab 分隔；对方/关联发票/备注可省略）：<br>
+        <code>日期,收/支,账户,类别,对方,金额,关联发票,备注</code><br>
+        例：<code>2026-08-01,支出,银行账户,工资薪金,张三,8000,,8月工资</code> ｜ 账户填 银行账户/现金/微信/支付宝，收/支填 收入/支出</div>
+      <textarea id="lPasteBox" rows="5" placeholder="在此粘贴多行，或从 Excel 复制一片区域直接粘贴"></textarea>
+      <div class="row">
+        <button class="btn" id="lParseBtn">解析并预览</button>
+        <button class="btn ghost" id="lClearPaste">清空</button>
+        <button class="btn ghost" id="lTplBtn">填入示例</button>
+        <button class="btn ghost" id="lCsvUpBtn">上传 .csv 文件</button>
+        <input type="file" id="lCsvFile" accept=".csv,.txt" style="display:none">
+      </div>
+      <div id="lParsePreview"></div>
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <h2>账户余额</h2>
+      <div class="cards" id="lBalances" style="grid-template-columns:repeat(4,1fr)"></div>
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <h2>月度 收入 vs 支出</h2>
+      <div class="chart" id="lChart"></div>
+
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <h2>收支明细</h2>
+      <div class="filters">
+        <div class="field"><label>收/支</label><select id="lfIO"><option value="">全部</option><option value="收入">收入</option><option value="支出">支出</option></select></div>
+        <div class="field"><label>账户</label><select id="lfAccount"><option value="">全部</option><option value="银行账户">银行账户</option><option value="现金">现金</option><option value="微信">微信</option><option value="支付宝">支付宝</option></select></div>
+        <div class="field"><label>起始日期</label><input id="lfFrom" type="date"></div>
+        <div class="field"><label>结束日期</label><input id="lfTo" type="date"></div>
+        <div class="field" style="flex:1;min-width:180px"><label>搜索（对方/备注/发票号）</label><input id="lfKw" placeholder="输入关键字"></div>
+        <div class="field" style="min-width:auto"><label>&nbsp;</label><button class="btn ghost sm" id="lfReset">重置</button></div>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr>
+            <th>日期</th><th>收/支</th><th>账户</th><th>类别</th><th>对方</th>
+            <th class="num">金额</th><th>关联发票</th><th>备注</th><th>操作</th>
+          </tr></thead>
+          <tbody id="ltbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 收付款跟踪 -->
+  <section id="track" class="view">
+    <div class="cards">
+      <div class="card out"><div class="t">销项·应收总额</div><div class="v" id="tOutTotal">¥0</div><div class="s">开出的票价税合计</div></div>
+      <div class="card net"><div class="t">销项·已收货款</div><div class="v" id="tOutRecv">¥0</div><div class="s" id="tOutRecvPct">已收 0%</div></div>
+      <div class="card" style="border-color:var(--out)"><div class="t">销项·未收货款</div><div class="v" id="tOutUnpaid" style="color:var(--out)">¥0</div><div class="s" id="tOutUnpaidCnt">0 笔未收</div></div>
+      <div class="card in"><div class="t">进项·未付总额</div><div class="v" id="tInUnreimb" style="color:var(--warn)">¥0</div><div class="s" id="tInUnreimbCnt">0 笔待付款</div></div>
+    </div>
+    <div class="panel" style="margin-bottom:18px">
+      <h2>开出的发票 · 收款跟踪</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>开票日期</th><th>发票号码</th><th>客户</th><th>类别</th>
+          <th class="num">价税合计</th><th class="num">已收货款</th><th class="num">未收货款</th><th>收款状态</th>
+          <th>收款日期</th><th>约定收款日</th><th>用途分类</th><th>备注</th></tr></thead>
+        <tbody id="tOutBody"></tbody></table></div>
+    </div>
+    <div class="panel">
+      <h2>收到的发票 · 付款跟踪</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>开票日期</th><th>发票号码</th><th>供应商</th><th>类别</th>
+          <th class="num">价税合计</th><th>付款状态</th><th>付款日期</th><th class="num">未付金额</th>
+          <th>用途分类</th><th>备注</th></tr></thead>
+        <tbody id="tInBody"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- 快速录入 -->
+  <section id="quick" class="view">
+    <div class="panel" style="margin-bottom:18px;border:2px dashed var(--brand);background:var(--brand-soft)">
+      <h2 style="margin-bottom:8px">📥 拖拽录入（最快）</h2>
+      <p style="margin:0 0 10px;color:var(--muted)">把下载好的发票文件直接拖到下面这个框里，自动识别并暂存，确认后一键入账。支持：发票图片（含二维码）、PDF 电子发票、CSV/TXT 批量表。可一次拖多张。</p>
+      <div id="dropZone" style="border:2px dashed #93c5fd;border-radius:12px;padding:26px;text-align:center;color:var(--brand);font-weight:600;cursor:pointer">
+        ⬇ 把发票文件拖到这里<br><span style="font-weight:400;color:var(--muted);font-size:12.5px">或点击此处选择文件（手机端点这里选图/拍照）</span>
+        <input type="file" id="dropInput" multiple accept="image/*,.csv,.txt,.pdf" style="display:none">
+      </div>
+      <div id="dropStatus" style="margin-top:10px;color:var(--muted);font-size:13px"></div>
+    </div>
+    <div class="panel" style="margin-bottom:18px">
+      <h2>① 批量粘贴 / Excel 导入</h2>
+      <p style="color:var(--muted);margin-top:0">把发票按下面格式一行一条粘贴进来（逗号或制表符分隔都可），或从 Excel 里复制一片区域直接粘贴。也可上传 .csv 文件。下方「③ 电子税务局 Excel 导入」可直接识别税局批量导出的表格。</p>
+      <div class="hint" style="margin-top:0;margin-bottom:12px">
+        列顺序：<b>类型,发票号码,日期,对方名称,类别,税率%,不含税金额,状态,备注</b><br>
+        例：销项,24417000000123456789,2026-08-17,示例科技有限公司,咨询服务费,6,10000,已完成,<br>
+        例：进项,24417000000222222221,2026-08-15,办公用品供应商,办公用品,13,3000,待处理,
+      </div>
+      <div class="field" style="max-width:340px;margin-bottom:12px"><label>导入到公司（选现有，或输入新增）</label><div class="row" style="gap:6px"><input id="qCompany" list="companyOptions" placeholder="选择或输入公司名" style="flex:1"><button class="btn ghost sm cmpEditBtn" type="button" title="重命名 / 管理公司">✎</button></div></div>
+      <div class="row" style="margin-bottom:10px">
+        <button class="btn ghost sm" id="tplBtn">填入示例格式</button>
+        <button class="btn ghost sm" id="csvUpBtn">上传 .csv 文件</button>
+        <input type="file" id="csvFile" accept=".csv,.txt" style="display:none">
+      </div>
+      <textarea id="pasteBox" rows="8" placeholder="在此粘贴多行发票数据…"></textarea>
+      <div class="row">
+        <button class="btn" id="parseBtn">解析并预览</button>
+        <button class="btn ghost" id="clearPaste">清空</button>
+      </div>
+      <div id="parsePreview" style="margin-top:14px"></div>
+    </div>
+
+    <div class="panel" style="margin-bottom:18px">
+      <h2>③ 电子税务局 Excel 导入</h2>
+      <p style="color:var(--muted);margin-top:0">把在<b>电子税务局</b>「全量发票查询」里批量导出的 Excel（.xlsx/.xls）拖进来或选文件，系统会自动识别列、判断销项/进项、并填好金额税额，预览确认后一键入账。<b>不会上传到任何云端，全程本地解析。</b></p>
+      <div class="row" style="margin-bottom:6px">
+        <button class="btn" id="xlsUpBtn">上传导出的 Excel</button>
+        <input type="file" id="xlsFile" accept=".xlsx,.xls,.csv" style="display:none">
+      </div>
+      <div id="xlsConfig" style="display:none;margin-top:12px;border-top:1px dashed var(--line);padding-top:12px">
+        <div class="hint" id="xlsMapping" style="margin-top:0"></div>
+        <div class="grid-2" style="margin-top:10px">
+          <div class="field"><label>导入方式</label>
+            <select id="xlsStrategy">
+              <option value="auto">自动判断（按购/销方名称匹配公司）</option>
+              <option value="销项">全部作为销项（我开出的票）</option>
+              <option value="进项">全部作为进项（我收到的票）</option>
+            </select>
+          </div>
+          <div class="field"><label>无法自动判断时的默认类型</label>
+            <select id="xlsType"><option value="销项">销项</option><option value="进项">进项</option></select>
+          </div>
+        </div>
+        <div class="field" style="max-width:340px;margin:10px 0"><label>默认公司（选现有，或输入新增）</label><div class="row" style="gap:6px"><input id="xlsCompany" list="companyOptions" placeholder="选择或输入公司名" style="flex:1"><button class="btn ghost sm cmpEditBtn" type="button" title="重命名 / 管理公司">✎</button></div></div>
+        <button class="btn" id="xlsParseBtn">解析并预览</button>
+      </div>
+      <div class="hint" style="margin-top:12px">说明：自动判断会拿表格里的「销售方名称 / 购买方名称」和你系统里的公司名做匹配——本公司是销售方就归为<b>销项</b>，是购买方就归为<b>进项</b>。若公司名对不上（如用的是简称），选「全部作为销项/进项」并指定公司即可。</div>
+    </div>
+
+    <div class="panel">
+      <h2>② 拍照 / 扫码识别（发票二维码）</h2>
+      <p style="color:var(--muted);margin-top:0">上传一张发票图片或截图（含右上角二维码即可），系统本地解码并自动填字段。<b>不会上传到任何云端。</b></p>
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn" id="imgUpBtn">上传发票图片</button>
+        <button class="btn ghost" id="camBtn">打开摄像头扫码</button>
+        <input type="file" id="imgFile" accept="image/*" style="display:none">
+      </div>
+      <video id="video" style="display:none;max-width:100%;border-radius:10px" playsinline></video>
+      <canvas id="scanCanvas" style="display:none"></canvas>
+      <div id="qrResult" style="margin-top:10px"></div>
+      <div class="hint">说明：大多数增值税专票 / 电子发票都带二维码，解码即可拿到发票号码、日期、金额等。若发票没有二维码或识别不准，请用上方「批量粘贴」或手动录入，并<b>务必核对金额</b>。</div>
+    </div>
+  </section>
+
+  <!-- 数据备份 -->
+  <section id="data" class="view">
+    <div class="panel">
+      <h2>数据备份与导出</h2>
+      <p style="color:var(--muted);margin-top:0">数据保存在本机浏览器。建议定期导出备份，换电脑或清缓存前务必先导出。</p>
+      <div class="row">
+        <button class="btn" id="expCsv">导出 Excel 表（.csv）</button>
+        <button class="btn ghost" id="expJson">导出备份（.json）</button>
+        <button class="btn ghost" id="impJson">导入备份（.json）</button>
+        <button class="btn warn" id="loadSample">载入示例数据</button>
+        <button class="btn ghost" id="syncFeishu">导出飞书同步包</button>
+        <button class="btn danger" id="clearAll">清空全部数据</button>
+        <input type="file" id="fileInput" accept=".json" style="display:none">
+      </div>
+      <div class="hint">导出的 .csv 可直接用 Excel / WPS 打开。若后续想让我把数据同步到<b>飞书表格</b>或<b>腾讯文档</b>，随时说一声即可。</div>
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <h2>公司 / 账套</h2>
+      <p style="color:var(--muted);margin-top:0">管理公司名称（重命名 / 新增 / 删除）。改名后，已录入的发票与台账会自动跟随改名。</p>
+      <button class="btn" id="cmpOpenFromData" type="button">管理公司名称</button>
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <h2>纳税人类型</h2>
+      <p style="color:var(--muted);margin-top:0">影响「应交增值税」计算。小规模纳税人进项税<b>不抵扣</b>（按销项不含税 × 征收率交税）；一般纳税人进项税可抵扣（销项税 − 进项税）。</p>
+      <div class="seg" style="margin-top:6px">
+        <label><input type="radio" name="tp" value="小规模" ${taxpayerType()==='小规模'?'checked':''}><span>小规模纳税人</span></label>
+        <label><input type="radio" name="tp" value="一般" ${taxpayerType()==='一般'?'checked':''}><span>一般纳税人</span></label>
+      </div>
+    </div>
+  </section>
+
+  <!-- 使用说明 -->
+  <section id="help" class="view">
+    <div class="panel help">
+      <h2>使用说明</h2>
+      <details open><summary>基础操作（打开 / 录入 / 税率 / 筛选）</summary><ol>
+        <li><b>打开方式：</b>浏览器打开即可，数据保存在本机浏览器。</li>
+        <li><b>录入发票：</b>点「录入发票」，先选<b>销项</b>（你开给客户的）或<b>进项</b>（供应商开给你的），填号码、日期、对方、税率、不含税金额，系统自动算税额和价税合计。</li>
+        <li><b>税率：</b>常用 13% / 9% / 6% / 3% / 1%，没有就选「自定义」。小规模纳税人常用 1% 或 3%。</li>
+        <li><b>查看与筛选：</b>「发票列表」可按类型、状态、日期、关键字筛选；点「编辑」可改，点「删除」可删。</li>
+      </ol></details>
+      <details open><summary>核心功能（概览 / 台账 / 收付款 / 飞书）</summary><ol>
+        <li><b>概览：</b>自动统计销项、进项、估算应交增值税和月度走势，顶部提醒条会列出逾期未收、待付款。</li>
+        <li><b>记账台账：</b>记录每日银行/现金/微信/支付宝收支，自动算余额；在「发票列表」点「记收付款」可把发票一键转为收付款记录。</li>
+        <li><b>收付款跟踪：</b>销项哪些已收货款、哪些没收（未收金额、是否逾期）；进项是否已付款、未付总额。状态可直接点击设置。</li>
+        <li><b>飞书同步：</b>在「数据备份」点「导出飞书同步包」，发给我即可推送进飞书多维表格，手机上也能看。</li>
+      </ol></details>
+      <details><summary>数据安全与扩展</summary><ol>
+        <li><b>备份：</b>在「数据备份」导出 .json 或 .csv。重要：清浏览器缓存或换电脑前先导出，否则数据会丢。</li>
+        <li><b>下一步：</b>可以让我加「工资社保核算」「利润表」「资产负债表」等模块。</li>
+      </ol></details>
+    </div>
+  </section>
+</main>
+
+<datalist id="companyOptions"></datalist>
+<div class="modal-mask" id="cmpModal">
+  <div class="modal">
+    <div class="modal-h"><h3>公司 / 账套管理</h3><button class="x" id="cmpModalClose" type="button" aria-label="关闭">×</button></div>
+    <p class="hint" style="margin-top:0">直接修改公司名即可重命名；已录入的发票与台账会自动跟随改名。也可新增 / 删除公司。</p>
+    <div id="cmpModalList"></div>
+    <div class="row" style="margin-top:12px;gap:8px">
+      <input id="cmpModalNew" placeholder="新增公司名称" style="flex:1;padding:8px;border:1px solid var(--line);border-radius:8px">
+      <button class="btn ghost" id="cmpModalAdd" type="button">+ 新增</button>
+    </div>
+    <div class="modal-f">
+      <button class="btn ghost" id="cmpModalCancel" type="button">取消</button>
+      <button class="btn" id="cmpModalSave" type="button">保存改动</button>
+    </div>
+  </div>
+</div>
+<div class="modal-mask" id="stModal">
+  <div class="modal">
+    <div class="modal-h"><h3 id="stTitle">设置收款状态</h3><button class="x" id="stClose" type="button" aria-label="关闭">×</button></div>
+    <p id="stInfo" class="hint" style="margin-top:0"></p>
+    <div class="seg" id="stSeg"></div>
+    <p id="stNumHint" style="font-size:13px;color:var(--muted);margin:10px 0 0;min-height:1.2em"></p>
+    <div id="stNumWrap" style="margin-top:8px;display:none">
+      <label style="font-size:13px">输入已收金额（¥，只能输数字）</label>
+      <input id="stNum" type="number" step="0.01" min="0" inputmode="decimal" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-sizing:border-box">
+    </div>
+    <div id="stDateWrap" style="margin-top:12px;display:none">
+      <label style="font-size:13px">付款日期</label>
+      <input id="stDate" type="date" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;margin-top:4px;box-sizing:border-box">
+    </div>
+    <div class="modal-f">
+      <button class="btn ghost" id="stCancel" type="button">取消</button>
+      <button class="btn" id="stOk" type="button">确定</button>
+    </div>
+  </div>
+</div>
+<div class="modal-mask" id="noteModal">
+  <div class="modal">
+    <div class="modal-h"><h3>设置备注</h3><button class="x" id="noteClose" type="button" aria-label="关闭">×</button></div>
+    <p id="noteInfo" class="hint" style="margin-top:0"></p>
+    <div class="seg" id="noteChips"></div>
+    <div style="margin-top:12px">
+      <label>备注内容（点上方选项，或直接输入）</label>
+      <input id="noteVal" type="text" list="payNoteList" placeholder="点击选择或直接输入" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px">
+    </div>
+    <div class="modal-f">
+      <button class="btn ghost" id="noteCancel" type="button">取消</button>
+      <button class="btn" id="noteOk" type="button">确定</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const KEY='invoice_records_v1';
+  let records=load();
+  records.forEach(r=>{ if(!r.taxStatus){ r.taxStatus=(r.status==='已作废')?'作废':'正常'; } if(r.origNumber===undefined)r.origNumber=''; });
+  let editingId=null;
+  let chartO=null,chartL=null;
+
+  /* ---------- 公司 / 账套 ---------- */
+  const CKEY='inv_companies_v1', CCUR='inv_curcompany_v1';
+  let companies=JSON.parse(localStorage.getItem(CKEY))||['公司一','公司二'];
+  let curCompany=localStorage.getItem(CCUR)||'全部';
+  records.forEach(r=>{if(!r.company)r.company=companies[0];});
+  function saveCompanies(){localStorage.setItem(CKEY,JSON.stringify(companies));}
+  function curFilter(arr){return curCompany==='全部'?arr:arr.filter(r=>r.company===curCompany);}
+  function fillCompanySel(){
+    const opts=['全部',...companies].map(c=>`<option value="${escapeHtml(c)}"${c===curCompany?' selected':''}>${escapeHtml(c)}</option>`).join('');
+    $('companySel').innerHTML=opts;
+    $('companyCur').textContent= curCompany==='全部'?'（汇总全部公司）':'（仅看：'+curCompany+'）';
+  }
+  function fillCompanyOptions(){
+    const dl=$('companyOptions'); if(dl)dl.innerHTML=companies.map(c=>`<option value="${escapeHtml(c)}">`).join('');
+  }
+  function ensureCompany(name){
+    name=(name||'').trim(); if(!name)return companies[0];
+    if(!companies.includes(name)){ companies.push(name); saveCompanies(); fillCompanyOptions(); fillCompanySel(); }
+    return name;
+  }
+  function quickCompany(){
+    const el=$('qCompany'); const v=el?el.value.trim():'';
+    return v|| (curCompany==='全部'?companies[0]:curCompany);
+  }
+  function renderAll(){renderOverview();renderTrack();renderList();renderLedger();}
+
+  /* ---------- 存储 ---------- */
+  function load(){try{return JSON.parse(localStorage.getItem(KEY))||[]}catch(e){return[]}}
+  function save(){localStorage.setItem(KEY,JSON.stringify(records))}
+
+  /* ---------- 工具 ---------- */
+  const $=id=>document.getElementById(id);
+  const fmt=n=>(n||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const money=n=>'¥'+fmt(n);
+  function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1800)}
+  function rateVal(){const r=$('fRate').value;if(r==='other')return parseFloat($('fRateCustom').value)||0;return parseFloat(r)}
+  function recalc(){
+    const amt=parseFloat($('fAmount').value)||0, r=rateVal();
+    const tax=amt*r/100, total=amt+tax;
+    $('calcBox').textContent='税额：'+money(tax)+' ｜ 价税合计：'+money(total);
+    const recvBtn=document.querySelector('#recvStatusWrap .seg-btn.active');
+    if(recvBtn&&recvBtn.dataset.recv==='已收')$('fReceived').value=amt?+(amt+tax).toFixed(2):'';
+  }
+  ['fAmount','fRate','fRateCustom'].forEach(id=>$(id)&&$(id).addEventListener('input',recalc));
+  $('fRate').addEventListener('change',()=>{$('rateCustomWrap').style.display=$('fRate').value==='other'?'block':'none';recalc()});
+
+  /* ---------- 导航 ---------- */
+  document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    b.classList.add('active');$(b.dataset.view).classList.add('active');
+    var cr=$('crumb');if(cr)cr.textContent='当前位置：'+b.textContent.trim();
+    if(b.dataset.view==='overview')renderOverview();
+    if(b.dataset.view==='list')renderList();
+    if(b.dataset.view==='ledger')renderLedger();
+    if(b.dataset.view==='track')renderTrack();
+  }));
+  $('companySel').addEventListener('change',()=>{
+    curCompany=$('companySel').value;localStorage.setItem(CCUR,curCompany);
+    fillCompanySel();renderAll();
+  });
+  $('companyManageBtn').addEventListener('click',openCompanyModal);
+
+  /* ---------- 表单 ---------- */
+  function syncTypeUI(){
+    const t=document.querySelector('input[name=type]:checked').value;
+    $('lblParty').textContent=t==='销项'?'客户名称':'供应商名称';
+    $('outTrack').style.display=t==='销项'?'block':'none';
+    $('inTrack').style.display=t==='进项'?'block':'none';
+    fillPayCatList();
+  }
+  document.querySelectorAll('input[name=type]').forEach(r=>r.addEventListener('change',syncTypeUI));
+  /* ---------- 收付款用途分类（可编辑） ---------- */
+  const PAYCAT_KEY='PAYCATS_V1';
+  function loadPayCats(){try{return JSON.parse(localStorage.getItem(PAYCAT_KEY))||null}catch(e){return null}}
+  let payCats=loadPayCats()||{out:['货款','预收款','服务费','其他收款'],in:['货款','费用报销','工资','房租','税费','其他付款']};
+  function savePayCats(){localStorage.setItem(PAYCAT_KEY,JSON.stringify(payCats))}
+  function fillPayCatList(){const t=document.querySelector('input[name=type]:checked').value;
+    const used=[...new Set(records.filter(r=>r.type===t&&r.payCategory).map(r=>r.payCategory))];
+    const all=[...new Set([...(t==='销项'?payCats.out:payCats.in),...used])];
+    $('payCatList').innerHTML=all.map(c=>`<option value="${escapeHtml(c)}">`).join('');}
+  function rememberPayCat(type,val){ if(!val)return; const arr=type==='销项'?payCats.out:payCats.in; if(!arr.includes(val)){arr.push(val);savePayCats();} }
+  const PAYNOTE_DEFS=['银行转账','对公转账','微信/支付宝','现金','承兑汇票','已收款','待收款','部分收款','发票未到暂缓付款','凭证号待补'];
+  function fillPayNoteList(){
+    $('payNoteList').innerHTML=PAYNOTE_DEFS.map(c=>`<option value="${escapeHtml(c)}">`).join('');
+  }
+  /* ---------- 收/付款状态点选（联动金额与日期） ---------- */
+  function curTotal(){const amt=parseFloat($('fAmount').value)||0;return +(amt*(1+rateVal()/100)).toFixed(2)}
+  function setRecvStatus(k){
+    document.querySelectorAll('#recvStatusWrap .seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.recv===k));
+    const total=curTotal();
+    if(k==='未收'){ $('fReceived').value=0; }
+    else if(k==='已收'){ if(total>0){$('fReceived').value=total;} else {$('fReceived').value='';toast('请先填写不含税金额');} }
+  }
+  function syncRecvStatus(){
+    const recv=parseFloat($('fReceived').value)||0, total=curTotal();
+    const k=total>0&&recv>=total-0.005?'已收':(recv>0?'部分':'未收');
+    document.querySelectorAll('#recvStatusWrap .seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.recv===k));
+  }
+  function setPayStatus(k){
+    document.querySelectorAll('#payStatusWrap .seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.pay===k));
+    if(k==='已付'){ if(!$('fReimbursedAt').value)$('fReimbursedAt').value=new Date().toISOString().slice(0,10); }
+    else { $('fReimbursedAt').value=''; }
+  }
+  function syncPayStatus(){
+    const k=$('fReimbursedAt').value?'已付':'待付';
+    document.querySelectorAll('#payStatusWrap .seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.pay===k));
+  }
+  document.querySelectorAll('#recvStatusWrap .seg-btn').forEach(b=>b.addEventListener('click',()=>setRecvStatus(b.dataset.recv)));
+  document.querySelectorAll('#payStatusWrap .seg-btn').forEach(b=>b.addEventListener('click',()=>setPayStatus(b.dataset.pay)));
+  $('fReceived').addEventListener('input',syncRecvStatus);
+  $('fReimbursedAt').addEventListener('change',syncPayStatus);
+  function resetForm(){
+    editingId=null;$('formTitle').textContent='录入一张发票';
+    ['fNumber','fParty','fTaxId','fCategory','fAmount','fRemark','fRateCustom','fReceived','fReimbursedAt','fPayDate','fDueDate','fPayCat','fPayNote','fPayCatIn','fPayNoteIn'].forEach(id=>$(id).value='');
+    $('fDate').value=new Date().toISOString().slice(0,10);
+    $('fRate').value='6';$('rateCustomWrap').style.display='none';
+    document.querySelector('input[name=type][value=销项]').checked=true;
+    $('fStatus').value='待处理';$('fTaxStatus').value='正常';recalc();syncTypeUI();syncRecvStatus();syncPayStatus();
+    $('fCompany').value=curCompany==='全部'?companies[0]:curCompany;
+    $('cancelEdit').style.display='none';
+  }
+  $('resetBtn').addEventListener('click',resetForm);
+  $('cancelEdit').addEventListener('click',resetForm);
+
+  $('saveBtn').addEventListener('click',()=>{
+    const type=document.querySelector('input[name=type]:checked').value;
+    const amt=parseFloat($('fAmount').value)||0;
+    if(!$('fNumber').value.trim()){toast('请填写发票号码');return}
+    if(!amt){toast('请填写不含税金额');return}
+    const r=rateVal(), tax=+(amt*r/100).toFixed(2), total=+(amt+tax).toFixed(2);
+    const rec={
+      id:editingId||('i'+Date.now()+Math.random().toString(36).slice(2,6)),
+      type, number:$('fNumber').value.trim(), date:$('fDate').value,
+      party:$('fParty').value.trim(), taxId:$('fTaxId').value.trim(),
+      category:$('fCategory').value.trim(), rate:r, amount:amt, tax, total,
+      status:$('fStatus').value, remark:$('fRemark').value.trim(),
+      received:parseFloat($('fReceived').value)||0,
+      reimburseDeadline:'',
+      reimbursedAt:$('fReimbursedAt').value||'',
+      payDate:$('fPayDate').value||'',
+      dueDate:$('fDueDate').value||'',
+      payCategory:(type==='销项'?$('fPayCat').value:$('fPayCatIn').value).trim(),
+      payNote:(type==='销项'?$('fPayNote').value:$('fPayNoteIn').value).trim(),
+      company:ensureCompany($('fCompany').value),
+      taxStatus:$('fTaxStatus').value, origNumber:'',
+      createdAt:editingId?(records.find(x=>x.id===editingId).createdAt):Date.now()
+    };
+    rememberPayCat(type,(type==='销项'?$('fPayCat').value:$('fPayCatIn').value).trim());
+    if(editingId){const i=records.findIndex(x=>x.id===editingId);records[i]=rec;toast('已更新')}
+    else{records.push(rec);toast('已保存')}
+    save();resetForm();renderOverview();renderList();
+  });
+
+  $('collectBtn').addEventListener('click',()=>{
+    const num=$('fNumber').value.trim();
+    if(!num){toast('请先填写发票号码');return;}
+    const sum=ledger.filter(l=>l.type==='收入'&&l.invoice===num).reduce((s,l)=>s+(l.amount||0),0);
+    $('fReceived').value=sum.toFixed(2);
+    toast('已从台账归集收入 ¥'+fmt(sum));
+  });
+
+  /* ---------- 税务有效金额 ---------- */
+  function eff(r){
+    const st=r.taxStatus||'正常';
+    if(st==='作废') return {amount:0,tax:0,total:0};
+    if(st==='红字') return {amount:+(-Math.abs(r.amount)).toFixed(2),tax:+(-Math.abs(r.tax)).toFixed(2),total:+(-Math.abs(r.total)).toFixed(2)};
+    return {amount:+(r.amount||0),tax:+(r.tax||0),total:+(r.total||0)};
+  }
+  function isNormalBiz(r){ const s=r.taxStatus||'正常'; return s!=='作废'&&s!=='已红冲'&&s!=='红字'; }
+  function taxpayerType(){ return localStorage.getItem('TAXP')||'小规模'; }
+  function mapTaxStatus(s){
+    if(!s)return '正常';
+    const t=String(s);
+    if(/作废|废/.test(t))return '作废';
+    if(/红冲|已红冲|被红冲|冲红/.test(t))return '已红冲';
+    if(/红字|负数/.test(t))return '红字';
+    return '正常';
+  }
+  function markRed(){ records.forEach(r=>{ if(r.taxStatus==='红字'&&r.origNumber){ const t=records.find(x=>x.number===r.origNumber&&(x.taxStatus||'正常')==='正常'); if(t)t.taxStatus='已红冲'; } }); }
+
+  /* ---------- 概览 ---------- */
+  function renderOverview(){
+    const all=curFilter(records);
+    const effSum=(type,key)=>all.filter(r=>r.type===type).reduce((s,r)=>s+eff(r)[key],0);
+    const outAmt=effSum('销项','amount'), outTax=effSum('销项','tax');
+    const inAmt=effSum('进项','amount'), inTax=effSum('进项','tax');
+    const tp=taxpayerType();
+    const vat = tp==='小规模' ? outTax : (outTax-inTax);
+    $('kOutAmt').textContent=money(outAmt);$('kOutTax').textContent='税额 '+money(outTax);
+    $('kInAmt').textContent=money(inAmt);$('kInTax').textContent='税额 '+money(inTax)+(tp==='小规模'?'（不抵扣）':'');
+    $('kVat').textContent=money(vat);
+    const sEl=$('kVat').nextElementSibling; if(sEl)sEl.textContent= tp==='小规模'?'销项有效税额（进项不抵扣）':'销项税 − 进项税';
+    $('kCount').textContent=all.length;
+    const ym=new Date().toISOString().slice(0,7);
+    $('kMonth').textContent='本月新增 '+all.filter(r=>r.date&&r.date.slice(0,7)===ym).length;
+    (function(){
+      var today=new Date().toISOString().slice(0,10);
+      var outAll=curFilter(records).filter(r=>r.type==='销项'&&isNormalBiz(r));
+      var inAll=curFilter(records).filter(r=>r.type==='进项'&&isNormalBiz(r));
+      var overCnt=0,overAmt=0,recvCnt=0,recvAmt=0,payCnt=0,payAmt=0;
+      outAll.forEach(r=>{var t=Number(r.total)||0,rc=Number(r.received)||0;if(rc<t-0.005){recvCnt++;recvAmt+=t-rc;if(r.dueDate&&r.dueDate<today){overCnt++;overAmt+=t-rc;}}});
+      inAll.forEach(r=>{if(!r.reimbursedAt){payCnt++;payAmt+=Number(r.total)||0;}});
+      var h='';
+      if(overCnt>0)h+='<div class="wb over" data-go="track"><div class="n">'+overCnt+' 笔</div><div class="l">逾期未收 '+money(overAmt)+'，点击去催款</div></div>';
+      if(payCnt>0)h+='<div class="wb pay" data-go="track"><div class="n">'+payCnt+' 笔</div><div class="l">待付款 '+money(payAmt)+'，点击查看</div></div>';
+      if(recvCnt>0&&overCnt===0)h+='<div class="wb recv" data-go="track"><div class="n">'+recvCnt+' 笔</div><div class="l">待收款 '+money(recvAmt)+'，点击查看</div></div>';
+      var wb=$('warnBar');wb.innerHTML=h;wb.style.display=h?'flex':'none';
+      wb.querySelectorAll('[data-go]').forEach(function(el){el.onclick=function(){document.querySelector('nav button[data-view=track]').click();};});
+    })();
+    renderChart();
+  }
+  function renderChart(){
+    const map={};
+    curFilter(records).forEach(r=>{
+      const m=(r.date||'').slice(0,7);if(!m)return;
+      const e=eff(r);
+      map[m]=map[m]||{o:0,i:0};
+      map[m][r.type==='销项'?'o':'i']+= e.total;
+    });
+    const months=Object.keys(map).sort().slice(-8);
+    const el=$('chart');
+    if(typeof echarts==='undefined'){el.innerHTML='<div class="empty">图表组件加载中，请联网后刷新</div>';return;}
+    if(!chartO)chartO=echarts.init(el);else chartO.resize();
+    chartO.setOption({
+      color:['#f5222d','#13c2c2'],
+      grid:{left:64,right:18,top:40,bottom:26},
+      legend:{data:['销项','进项'],top:6,textStyle:{color:'#6b7280',fontSize:12}},
+      tooltip:{trigger:'axis',axisPointer:{type:'shadow'},valueFormatter:v=>'¥'+fmt(Math.round(v||0))},
+      xAxis:{type:'category',data:months.map(m=>m.slice(5)+'月'),axisTick:{show:false},axisLine:{lineStyle:{color:'#e4e6eb'}},axisLabel:{color:'#8a9099'}},
+      yAxis:{type:'value',splitLine:{lineStyle:{color:'#f0f1f4'}},axisLabel:{color:'#8a9099',formatter:v=>v>=10000?(v/10000)+'万':v}},
+      series:[
+        {name:'销项',type:'bar',data:months.map(m=>Math.round(map[m].o||0)),barWidth:'30%',itemStyle:{color:'#f5222d',borderRadius:[6,6,0,0]}},
+        {name:'进项',type:'bar',data:months.map(m=>Math.round(map[m].i||0)),barWidth:'30%',itemStyle:{color:'#13c2c2',borderRadius:[6,6,0,0]}}
+      ]
+    },true);
+  }
+
+  /* ---------- 收付款跟踪 ---------- */
+  function payStatus(r){
+    const recv=Number(r.received)||0, total=Number(r.total)||0;
+    const today=new Date().toISOString().slice(0,10);
+    if(recv>=total-0.005)return {k:'已收',cls:'done'};
+    if(r.dueDate && r.dueDate<today)return {k:'逾期未收',cls:'over'};
+    if(recv>0)return {k:'部分',cls:'wait'};
+    return {k:'未收',cls:'wait'};
+  }
+  function reimbStatus(r){
+    if(r.reimbursedAt)return {k:'已付款',cls:'done'};
+    return {k:'待付款',cls:'wait'};
+  }
+  function renderTrack(){
+    const all=curFilter(records);
+    const out=all.filter(r=>r.type==='销项'&&isNormalBiz(r));
+    const inc=all.filter(r=>r.type==='进项'&&isNormalBiz(r));
+    const sum=(a,k)=>a.reduce((s,x)=>s+(x[k]||0),0);
+    const outTotal=sum(out,'total');
+    let outRecv=0,outUnpaid=0,outUnpaidCnt=0;
+    const ob=out.slice().sort((a,b)=>((Number(b.total)||0)-(Number(b.received)||0))-((Number(a.total)||0)-(Number(a.received)||0))).map(r=>{
+      const recv=Number(r.received)||0, total=Number(r.total)||0, unpaid=Math.max(0,total-recv);
+      outRecv+=recv; outUnpaid+=unpaid; if(unpaid>0.005)outUnpaidCnt++;
+      const ps=payStatus(r);
+      return `<tr><td>${r.date||''}</td><td>${r.number}</td><td>${escapeHtml(r.party)}</td><td>${escapeHtml(r.category)}</td>
+        <td class="num">${fmt(total)}</td><td class="num">${fmt(recv)}</td><td class="num" style="color:var(--out)">${fmt(unpaid)}</td>
+        <td><span class="tag ${ps.cls}" style="cursor:pointer" data-tog="recv" data-id="${r.id}" title="点击切换：未收→部分→已收">${ps.k}</span></td>
+        <td>${r.payDate||'—'}</td><td>${r.dueDate||'—'}</td><td>${escapeHtml(r.payCategory)||'—'}</td>
+        <td><a class="noteLink${r.payNote?'':' empty'}" data-note="${r.id}" title="点击编辑备注">${r.payNote?escapeHtml(r.payNote.slice(0,20)):'＋备注'}</a></td></tr>`;
+    }).join('');
+    $('tOutBody').innerHTML=ob||'<tr><td colspan="12" class="empty">暂无销项发票</td></tr>';
+    $('tOutTotal').textContent=money(outTotal);
+    $('tOutRecv').textContent=money(outRecv);
+    $('tOutRecvPct').textContent='已收 '+ (outTotal? Math.round(outRecv/outTotal*100):0) +'%';
+    $('tOutUnpaid').textContent=money(outUnpaid);
+    $('tOutUnpaidCnt').textContent=outUnpaidCnt+' 笔未收';
+    let inUnpaid=0,inUnpaidCnt=0;
+    const ib=inc.map(r=>{
+      const total=Number(r.total)||0; const rs=reimbStatus(r);
+      const unreimb=rs.k==='已付款'?0:total;
+      inUnpaid+=unreimb; if(unreimb>0.005)inUnpaidCnt++;
+      return `<tr><td>${r.date||''}</td><td>${r.number}</td><td>${escapeHtml(r.party)}</td><td>${escapeHtml(r.category)}</td>
+        <td class="num">${fmt(total)}</td><td><span class="tag ${rs.cls}" style="cursor:pointer" data-tog="pay" data-id="${r.id}" title="点击切换：待付/已付">${rs.k}</span></td>
+        <td>${r.reimbursedAt||'—'}</td><td class="num" style="color:var(--warn)">${fmt(unreimb)}</td>
+        <td>${escapeHtml(r.payCategory)||'—'}</td>
+        <td><a class="noteLink${r.payNote?'':' empty'}" data-note="${r.id}" title="点击编辑备注">${r.payNote?escapeHtml(r.payNote.slice(0,20)):'＋备注'}</a></td></tr>`;
+    }).join('');
+    $('tInBody').innerHTML=ib||'<tr><td colspan="10" class="empty">暂无进项发票</td></tr>';
+    $('tInUnreimb').textContent=money(inUnpaid);
+    $('tInUnreimbCnt').textContent=inUnpaidCnt+' 笔待付款';
+    document.querySelectorAll('#tOutBody [data-tog]').forEach(el=>el.onclick=()=>toggleRecv(el.dataset.id));
+    document.querySelectorAll('#tInBody [data-tog]').forEach(el=>el.onclick=()=>togglePay(el.dataset.id));
+    document.querySelectorAll('#tOutBody [data-note],#tInBody [data-note]').forEach(el=>el.onclick=()=>openNoteModal(el.dataset.note));
+  }
+  function toggleRecv(id){ openStModal('recv',id); }
+  function togglePay(id){ openStModal('pay',id); }
+  let stCtx=null;
+  function openStModal(kind,id){
+    const r=records.find(x=>x.id===id); if(!r)return;
+    stCtx={kind,id};
+    const total=Number(r.total)||0, recv=Number(r.received)||0;
+    const G=id2=>document.getElementById(id2);
+    if(kind==='recv'){
+      G('stTitle').textContent='设置收款状态';
+      G('stInfo').textContent='价税合计：¥'+fmt(total)+'　已收：¥'+fmt(recv)+'　未收：¥'+fmt(Math.max(0,total-recv));
+      G('stSeg').innerHTML='<button type="button" class="seg-btn" data-st="未收">未收</button><button type="button" class="seg-btn" data-st="部分">部分</button><button type="button" class="seg-btn" data-st="已收">已收</button>';
+      G('stNumWrap').style.display='block';
+      G('stNum').value=recv>0?recv:'';
+      G('stDateWrap').style.display='none';
+      setStSeg(recv>=total-0.005&&total>0?'已收':(recv>0?'部分':'未收'));
+    } else {
+      G('stTitle').textContent='设置付款状态';
+      G('stInfo').textContent='价税合计：¥'+fmt(total);
+      G('stSeg').innerHTML='<button type="button" class="seg-btn" data-st="待付">待付</button><button type="button" class="seg-btn" data-st="已付">已付</button>';
+      G('stNumWrap').style.display='none';
+      G('stDateWrap').style.display='block';
+      G('stDate').value=r.reimbursedAt||'';
+      setStSeg(r.reimbursedAt?'已付':'待付');
+    }
+    G('stModal').style.display='flex';
+  }
+  function setStSeg(sel){
+    document.querySelectorAll('#stSeg .seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.st===sel));
+    const ctx=stCtx; if(!ctx)return;
+    const r=records.find(x=>x.id===ctx.id); if(!r)return;
+    const total=Number(r.total)||0, recv=Number(r.received)||0;
+    if(ctx.kind==='recv'){
+      const numWrap=document.getElementById('stNumWrap');
+      const num=document.getElementById('stNum');
+      const hint=document.getElementById('stNumHint');
+      const total=Number(r.total)||0;
+      if(sel==='未收'){
+        numWrap.style.display='none';
+        num.value=0;
+        hint.textContent='保存后：已收 ¥0.00，未收 ¥'+fmt(total);
+      } else if(sel==='已收'){
+        numWrap.style.display='none';
+        num.value=total||'';
+        hint.textContent='保存后：已收 ¥'+fmt(total)+'，未收 ¥0.00';
+      } else {
+        numWrap.style.display='block';
+        if(!(parseFloat(num.value)>0))num.value=Math.min(recv||0,total)||'';
+        updStHint();
+      }
+    } else {
+      const d=document.getElementById('stDate');
+      if(sel==='已付'&&!d.value)d.value=new Date().toISOString().slice(0,10);
+      if(sel==='待付')d.value='';
+    }
+  }
+  function updStHint(){
+    const ctx=stCtx; if(!ctx||ctx.kind!=='recv')return;
+    const r=records.find(x=>x.id===ctx.id); if(!r)return;
+    const total=Number(r.total)||0;
+    const v=Math.min(parseFloat(document.getElementById('stNum').value)||0,total);
+    document.getElementById('stNumHint').textContent='保存后：已收 ¥'+fmt(v)+'，未收 ¥'+fmt(Math.max(0,total-v));
+  }
+  function closeStModal(){stCtx=null;document.getElementById('stModal').style.display='none';}
+  document.getElementById('stSeg').addEventListener('click',e=>{const b=e.target.closest('.seg-btn');if(b)setStSeg(b.dataset.st);});
+  document.getElementById('stNum').addEventListener('input',updStHint);
+  document.getElementById('stOk').addEventListener('click',()=>{
+    const ctx=stCtx; if(!ctx){closeStModal();return;}
+    const r=records.find(x=>x.id===ctx.id); if(!r){closeStModal();return;}
+    const selBtn=document.querySelector('#stSeg .seg-btn.active');
+    const k=selBtn?selBtn.dataset.st:'';
+    if(ctx.kind==='recv'){
+      if(k==='未收')r.received=0;
+      else if(k==='已收')r.received=Number(r.total)||0;
+      else { const v=parseFloat(document.getElementById('stNum').value); if(isNaN(v)||v<0){toast('请输入有效数字');return;} r.received=Math.min(v,Number(r.total)||0); }
+      save();renderTrack();renderList();toast('收款状态已保存：已收 ¥'+fmt(r.received)+'，未收 ¥'+fmt(Math.max(0,(Number(r.total)||0)-r.received)));
+    } else {
+      if(k==='已付')r.reimbursedAt=document.getElementById('stDate').value||new Date().toISOString().slice(0,10);
+      else r.reimbursedAt='';
+      save();renderTrack();renderList();toast('付款状态已保存');
+    }
+    closeStModal();
+  });
+  document.getElementById('stCancel').addEventListener('click',closeStModal);
+  document.getElementById('stClose').addEventListener('click',closeStModal);
+  /* ---------- 备注编辑弹窗 ---------- */
+  let noteCtx=null;
+  function openNoteModal(id){
+    const r=records.find(x=>x.id===id); if(!r)return;
+    noteCtx=id;
+    $('noteInfo').textContent=(r.type==='销项'?'销项发票':'进项发票')+' · '+r.number+' · '+(r.party||'');
+    const used=[...new Set(records.map(x=>x.payNote).filter(Boolean))];
+    const all=[...new Set([...PAYNOTE_DEFS,...used])];
+    $('noteChips').innerHTML=all.map(c=>`<button type="button" class="seg-btn" data-nc="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
+    $('noteVal').value=r.payNote||'';
+    $('noteModal').style.display='flex';
+  }
+  function closeNoteModal(){noteCtx=null;$('noteModal').style.display='none';}
+  $('noteChips').addEventListener('click',e=>{const b=e.target.closest('.seg-btn');if(b)$('noteVal').value=b.dataset.nc;});
+  $('noteOk').addEventListener('click',()=>{
+    if(!noteCtx){closeNoteModal();return;}
+    const r=records.find(x=>x.id===noteCtx); if(!r){closeNoteModal();return;}
+    r.payNote=$('noteVal').value.trim();
+    save();renderTrack();renderList();renderOverview();closeNoteModal();toast('备注已保存');
+  });
+  $('noteCancel').addEventListener('click',closeNoteModal);
+  $('noteClose').addEventListener('click',closeNoteModal);
+
+  /* ---------- 列表 ---------- */
+  function renderList(){
+    const curN=$('flNote')?$('flNote').value:'';
+    const used=[...new Set(records.map(r=>r.payNote).filter(Boolean))];
+    $('flNote').innerHTML='<option value="">全部备注</option>'+used.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    $('flNote').value=curN;
+    const t=filters();
+    const tb=$('tbody');
+    if(!t.length){tb.innerHTML='<tr><td colspan="11" class="empty">没有符合条件的发票</td></tr>';return}
+    tb.innerHTML=t.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(r=>{
+      const st=(r.taxStatus||'正常')==='正常'?'done':(r.taxStatus==='红字')?'over':(r.taxStatus==='作废'||r.taxStatus==='已红冲')?'void':'wait';
+      const trk=r.type==='销项'?payStatus(r):reimbStatus(r);
+      const e=eff(r);
+      return `<tr>
+        <td>${r.date||''}</td>
+        <td><span class="tag ${r.type==='销项'?'out':'in'}">${r.type}</span></td>
+        <td>${r.number}</td><td>${r.party||''}</td><td>${r.category||''}</td>
+        <td class="num">${fmt(e.amount)}</td><td class="num">${fmt(e.tax)}</td><td class="num">${fmt(e.total)}</td>
+        <td><span class="tag ${st}">${r.taxStatus||'正常'}</span></td>
+        <td><span class="tag ${trk.cls}" style="cursor:pointer" data-tog="${r.type==='销项'?'recv':'pay'}" data-id="${r.id}" title="点击切换状态">${trk.k}</span></td>
+        <td><button class="btn ghost sm" data-edit="${r.id}">编辑</button>
+            <button class="btn danger sm" data-del="${r.id}">删除</button>
+            <button class="btn ghost sm" data-ledger="${r.id}">记收付款</button></td>
+      </tr>`;
+    }).join('');
+    tb.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editRec(b.dataset.edit));
+    tb.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delRec(b.dataset.del));
+    tb.querySelectorAll('[data-ledger]').forEach(b=>b.onclick=()=>{const rec=records.find(x=>x.id===b.dataset.ledger);if(rec)addFromInvoice(rec);});
+    tb.querySelectorAll('[data-tog]').forEach(b=>b.onclick=()=>{ if(b.dataset.tog==='recv')toggleRecv(b.dataset.id); else togglePay(b.dataset.id); });
+  }
+  function filters(){
+    const t=$('flType').value, s=$('flStatus').value, f=$('flFrom').value, to=$('flTo').value,
+          kw=$('flKw').value.trim().toLowerCase(), n=$('flNote').value;
+    return curFilter(records).filter(r=>{
+      if(t&&r.type!==t)return false;
+      if(s&&r.status!==s)return false;
+      if(f&&r.date&&r.date<f)return false;
+      if(to&&r.date&&r.date>to)return false;
+      if(kw&&!(r.number+r.party+r.category).toLowerCase().includes(kw))return false;
+      if(n&&(r.payNote||'')!==n)return false;
+      return true;
+    });
+  }
+  ['flType','flStatus','flFrom','flTo','flKw'].forEach(id=>$(id).addEventListener('input',renderList));
+  $('flReset').addEventListener('click',()=>{['flType','flStatus','flFrom','flTo','flKw'].forEach(i=>$(i).value='');renderList()});
+
+  function editRec(id){const r=records.find(x=>x.id===id);if(!r)return;
+    editingId=id;$('formTitle').textContent='编辑发票';
+    document.querySelector(`input[name=type][value="${r.type}"]`).checked=true;
+    $('fNumber').value=r.number;$('fDate').value=r.date;$('fParty').value=r.party;
+    $('fTaxId').value=r.taxId;$('fCategory').value=r.category;
+    const known=['13','9','6','3','1','0'];
+    if(known.includes(String(r.rate))){$('fRate').value=String(r.rate);$('rateCustomWrap').style.display='none'}
+    else{$('fRate').value='other';$('rateCustomWrap').style.display='block';$('fRateCustom').value=r.rate}
+    $('fAmount').value=r.amount;$('fStatus').value=r.status;$('fTaxStatus').value=r.taxStatus||'正常';$('fRemark').value=r.remark;
+    $('fReceived').value=r.received||0;$('fReimbursedAt').value=r.reimbursedAt||'';
+    $('fPayDate').value=r.payDate||'';$('fDueDate').value=r.dueDate||'';
+    $('fPayCat').value=r.type==='销项'?(r.payCategory||''):'';$('fPayNote').value=r.type==='销项'?(r.payNote||''):'';
+    $('fPayCatIn').value=r.type==='进项'?(r.payCategory||''):'';$('fPayNoteIn').value=r.type==='进项'?(r.payNote||''):'';
+    $('fCompany').value=r.company||companies[0];
+    $('cancelEdit').style.display='inline-block';recalc();syncTypeUI();syncRecvStatus();syncPayStatus();
+    document.querySelector('nav button[data-view=entry]').click();
+  }
+  function delRec(id){if(!confirm('确定删除这张发票？'))return;
+    records=records.filter(x=>x.id!==id);save();toast('已删除');renderList();renderOverview();}
+
+  /* ---------- 数据 ---------- */
+  function download(name,content,type){
+    const b=new Blob([content],{type});const u=URL.createObjectURL(b);
+    const a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);
+  }
+  $('expCsv').addEventListener('click',()=>{
+    const head=['所属公司','日期','类型','发票号码','对方名称','对方税号','类别','税率(%)','不含税金额','税额','价税合计','状态','税务状态','收/付款状态','已收货款','未收货款','收款日期','约定收款日','付款日期','用途分类','备注','收付款备注'];
+    const rows=records.map(r=>{
+      const recv=Number(r.received)||0, unpaid=Math.max(0,(Number(r.total)||0)-recv);
+      const trk=r.type==='销项'?payStatus(r):reimbStatus(r);
+      return [r.company,r.date,r.type,r.number,r.party,r.taxId,r.category,r.rate,r.amount,r.tax,r.total,r.status,r.taxStatus||'正常',trk.k,recv,unpaid,r.payDate||'',r.dueDate||'',r.reimbursedAt||'',r.payCategory||'',r.remark,r.payNote||'']
+        .map(v=>'"'+(v==null?'':String(v)).replace(/"/g,'""')+'"').join(',');
+    });
+    download('发票数据_'+new Date().toISOString().slice(0,10)+'.csv','\uFEFF'+head.join(',')+'\n'+rows.join('\n'),'text/csv;charset=utf-8');
+    toast('已导出 Excel 表');
+  });
+  $('expJson').addEventListener('click',()=>{
+    download('发票备份_'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(records,null,2),'application/json');
+    toast('已导出备份');
+  });
+  $('impJson').addEventListener('click',()=>$('fileInput').click());
+  $('fileInput').addEventListener('change',e=>{
+    const f=e.target.files[0];if(!f)return;const rd=new FileReader();
+    rd.onload=()=>{try{const d=JSON.parse(rd.result);if(!Array.isArray(d))throw 0;
+      if(confirm('导入将追加到现有数据，确定？')){records=records.concat(d);save();toast('已导入 '+d.length+' 条');renderOverview();renderList()}}
+      catch(_){toast('文件格式不正确')};
+      $('fileInput').value='';};
+    rd.readAsText(f);
+  });
+  $('clearAll').addEventListener('click',()=>{
+    if(confirm('将清空全部发票数据，且无法恢复！建议先导出备份。确定清空？')){records=[];save();toast('已清空');renderOverview();renderList()}
+  });
+  $('loadSample').addEventListener('click',()=>{
+    if(records.length&&!confirm('将追加一组示例数据，确定？'))return;
+    const now=new Date(),ym=now.toISOString().slice(0,7);
+    const dAgo=n=>{const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10);};
+    const dFwd=n=>{const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);};
+    const mk=o=>{const amt=o.amt,rate=o.rate,tax=+(amt*rate/100).toFixed(2);
+      return Object.assign({id:'i'+Date.now()+Math.random().toString(36).slice(2,6),party:'',category:'',taxId:'',remark:'',received:0,reimbursedAt:'',reimburseDeadline:'',payDate:'',dueDate:'',payCategory:'',payNote:'',createdAt:Date.now()},o,{amount:amt,tax,total:+(amt+tax).toFixed(2)});};
+    const sample=[
+      mk({date:ym+'-01',type:'销项',number:'24417000000111111111',party:'示例科技有限公司',category:'咨询服务费',rate:6,amt:10000,status:'已完成',received:10600,company:companies[0]}),
+      mk({date:ym+'-10',type:'销项',number:'24417000000111111112',party:'示例贸易有限公司',category:'软件开发',rate:13,amt:50000,status:'已完成',received:30000,payCategory:'货款',payNote:'已收部分，尾款待催',company:companies[0]}),
+      mk({date:dAgo(8),type:'销项',number:'24417000000111111113',party:'新客户商贸行',category:'设备销售',rate:13,amt:20000,status:'已完成',received:0,company:companies[0]}),
+      mk({date:ym+'-01',type:'进项',number:'24417000000222222221',party:'办公用品供应商',category:'办公用品',rate:13,amt:3000,status:'已完成',reimbursedAt:ym+'-02',company:companies[1]}),
+      mk({date:ym+'-10',type:'进项',number:'24417000000222222222',party:'云服务器提供商',category:'技术服务费',rate:6,amt:6000,status:'待处理',company:companies[1]}),
+      mk({date:dAgo(8),type:'进项',number:'24417000000222222223',party:'差旅服务商',category:'交通费',rate:9,amt:1500,status:'已完成',payCategory:'费用报销',payNote:'发票未齐，暂缓付款',company:companies[1]}),
+    ];
+    records=records.concat(sample);save();toast('已载入示例');renderOverview();renderList();renderTrack();
+  });
+
+  /* ---------- 快速录入：批量粘贴 ---------- */
+  let staging=[];
+  function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+  function parseLines(text){
+    const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    const out=[];
+    lines.forEach(line=>{
+      let cols=line.includes('\t')?line.split('\t'):line.split(',');
+      cols=cols.map(c=>c.trim());
+      if(cols.length<7)return;
+      let type=cols[0];if(type!=='销项'&&type!=='进项')type='销项';
+      const number=cols[1]||'',date=cols[2]||'',party=cols[3]||'',category=cols[4]||'';
+      const rate=parseFloat((cols[5]||'6').replace('%',''))||0;
+      const amount=parseFloat(cols[6])||0;
+      if(!number||!amount)return;
+      const tax=+(amount*rate/100).toFixed(2);
+      out.push({type,number,date,party,category,rate,amount,tax,total:+(amount+tax).toFixed(2),status:cols[7]||'待处理',taxStatus:'正常',origNumber:'',remark:cols[8]||'',received:0,reimburseDeadline:'',reimbursedAt:'',payDate:'',dueDate:'',payCategory:'',payNote:''});
+    });
+    return out;
+  }
+  function renderPreview(){
+    const rows=staging;
+    if(!rows.length){$('parsePreview').innerHTML='';return;}
+    const tb=rows.map(r=>{const e=eff(r);return `<tr><td><span class="tag ${r.type==='销项'?'out':'in'}">${r.type}</span></td>
+      <td>${escapeHtml(r.company||'')}</td>
+      <td>${escapeHtml(r.number)}</td><td>${r.date}</td><td>${escapeHtml(r.party)}</td>
+      <td>${escapeHtml(r.category)}</td>      <td class="num">${fmt(e.amount)}</td>
+      <td class="num">${fmt(e.tax)}</td><td class="num">${fmt(e.total)}</td><td>${r.taxStatus||'正常'}</td></tr>`;}).join('');
+    $('parsePreview').innerHTML=`<div class="tablewrap" style="margin-bottom:10px"><table>
+      <thead><tr><th>类型</th><th>公司</th><th>发票号码</th><th>日期</th><th>对方</th><th>类别</th>
+      <th class="num">不含税</th><th class="num">税额</th><th class="num">价税合计</th><th>状态</th></tr></thead>
+      <tbody>${tb}</tbody></table></div>
+      <button class="btn" id="confirmBatch">确认导入 ${rows.length} 条</button>`;
+    $('confirmBatch').onclick=()=>{
+      records=records.concat(rows.map(r=>({id:'i'+Date.now()+Math.random().toString(36).slice(2,6),createdAt:Date.now(),...r})));
+      markRed();save();staging=[];renderPreview();toast('已导入 '+rows.length+' 条');renderOverview();renderList();
+    };
+  }
+  function ingest(rows){ if(!rows||!rows.length){toast('没有可导入的数据');return;}
+    rows.forEach(r=>{ if(!r.company)r.company=quickCompany(); ensureCompany(r.company); });
+    staging=staging.concat(rows); renderPreview(); }
+  $('parseBtn').addEventListener('click',()=>{ ingest(parseLines($('pasteBox').value)); });
+  $('clearPaste').addEventListener('click',()=>{$('pasteBox').value='';staging=[];renderPreview();});
+  $('tplBtn').addEventListener('click',()=>{
+    $('pasteBox').value='销项,24417000000123456789,2026-08-17,示例科技有限公司,咨询服务费,6,10000,已完成,\n'+
+                        '进项,24417000000222222221,2026-08-15,办公用品供应商,办公用品,13,3000,待处理,';
+    toast('已填入示例，可直接修改');
+  });
+  $('csvUpBtn').addEventListener('click',()=>$('csvFile').click());
+  $('csvFile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>ingest(parseLines(t)));e.target.value='';});
+
+  /* 拖拽 + 多文件录入（图片/PDF/CSV） */
+  function qrToRow(raw){
+    const info=parseQR(raw);
+    const amt=parseFloat(info.amount)||0, rate=6, tax=+(amt*rate/100).toFixed(2);
+    return {type:'销项',number:info.number,date:info.date,party:'',category:'',rate,amount:amt,tax,total:+(amt+tax).toFixed(2),status:'待处理',remark:'扫码识别，请核对'};
+  }
+  async function pdfToRaw(file){
+    if(typeof pdfjsLib==='undefined'){toast('PDF 解析库未加载（可能离线），请联网后重试，或先把 PDF 转图片再拖入');return null;}
+    try{const buf=await file.arrayBuffer();
+      const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+      const page=await pdf.getPage(1);
+      const vp=page.getViewport({scale:2});
+      const c=$('scanCanvas');c.width=vp.width;c.height=vp.height;
+      const ctx=c.getContext('2d');await page.render({canvasContext:ctx,viewport:vp}).promise;
+      return imageToRaw(c);
+    }catch(e){return null;}
+  }
+  async function handleFiles(fileList){
+    const files=Array.from(fileList); if(!files.length)return;
+    $('dropStatus').textContent='处理中 '+files.length+' 个文件…';
+    const rows=[],bad=[];
+    for(const f of files){
+      const n=f.name.toLowerCase();
+      try{
+        if(n.endsWith('.csv')||n.endsWith('.txt')){ rows.push(...parseLines(await f.text())); }
+        else if(f.type.startsWith('image/')||/\.(png|jpe?g|webp|bmp|gif)$/.test(n)){
+          const raw=await new Promise(res=>{const img=new Image();img.onload=()=>res(imageToRaw(img));img.onerror=()=>res(null);img.src=URL.createObjectURL(f);});
+          if(raw)rows.push(qrToRow(raw)); else bad.push(f.name);
+        }
+        else if(n.endsWith('.pdf')){ const raw=await pdfToRaw(f); if(raw)rows.push(qrToRow(raw)); else bad.push(f.name+'(PDF)'); }
+        else bad.push(f.name);
+      }catch(_){ bad.push(f.name); }
+    }
+    $('dropStatus').textContent='识别完成：成功 '+rows.length+' 张'+(bad.length?'，失败 '+bad.length+' 张（'+bad.join('、')+'）':'');
+    if(rows.length)ingest(rows);
+  }
+  function setupDrop(){
+    const dz=$('dropZone');
+    dz.addEventListener('click',()=>$('dropInput').click());
+    $('dropInput').addEventListener('change',e=>{handleFiles(e.target.files);e.target.value='';});
+    ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.style.background='#dbeafe';}));
+    ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.style.background='';}));
+    dz.addEventListener('drop',e=>{handleFiles(e.dataTransfer.files);});
+    const qv=$('quick');
+    qv.addEventListener('dragover',e=>e.preventDefault());
+    qv.addEventListener('drop',e=>{e.preventDefault();handleFiles(e.dataTransfer.files);});
+  }
+
+  /* ---------- 快速录入：拍照/扫码 ---------- */
+  let pendingQR=null;
+  function parseQR(raw){
+    const parts=raw.split(/[,，]/).map(s=>s.trim());
+    const res={number:'',date:'',amount:''};
+    parts.forEach(p=>{
+      if(!res.number&&/^\d{8}$/.test(p))res.number=p;
+      const dm=p.match(/^(20\d{2})(\d{2})(\d{2})$/);if(dm&&!res.date)res.date=dm[1]+'-'+dm[2]+'-'+dm[3];
+      if(!res.amount&&/^\d+\.\d{2}$/.test(p))res.amount=p;
+    });
+    return res;
+  }
+  function imageToRaw(src){
+    const c=$('scanCanvas');const max=1400;
+    const scale=Math.min(1,max/Math.max(src.width,src.height));
+    c.width=Math.max(1,src.width*scale);c.height=Math.max(1,src.height*scale);
+    const ctx=c.getContext('2d');ctx.drawImage(src,0,0,c.width,c.height);
+    if(typeof jsQR==='undefined'){toast('扫码库未加载（可能离线），请联网后重试或手动录入');return null}
+    const d=ctx.getImageData(0,0,c.width,c.height);
+    const r=jsQR(d.data,c.width,c.height);
+    return r?r.data:null;
+  }
+  function handleQR(raw){
+    const info=parseQR(raw);
+    let html=`<div class="calc">解码成功！原始内容：<br><code style="word-break:break-all">${escapeHtml(raw)}</code></div>`;
+    html+=`<div class="hint" style="margin-top:10px">已自动识别：发票号码 <b>${info.number||'—'}</b> ｜ 日期 <b>${info.date||'—'}</b> ｜ 金额 <b>${info.amount||'—'}</b>。请务必核对，金额可能需手填税率后重算。</div>`;
+    html+=`<div class="row"><button class="btn" id="qrFill">填入录入表单</button></div>`;
+    $('qrResult').innerHTML=html;pendingQR=info;
+    $('qrFill').onclick=()=>{
+      document.querySelector('input[name=type][value=销项]').checked=true;
+      $('lblParty').textContent='客户名称';
+      $('fNumber').value=info.number;$('fDate').value=info.date;
+      $('fParty').value='';$('fCategory').value='';$('fRate').value='6';$('rateCustomWrap').style.display='none';
+      $('fAmount').value=info.amount;$('fStatus').value='待处理';$('fRemark').value='';editingId=null;
+      $('fCompany').value=curCompany==='全部'?companies[0]:curCompany;
+      $('calcBox').textContent='税额：'+money((parseFloat(info.amount)||0)*0.06)+' ｜ 价税合计：'+money((parseFloat(info.amount)||0)*1.06);
+      document.querySelector('nav button[data-view=entry]').click();
+      toast('已带入识别结果，请核对后保存');
+    };
+  }
+  $('imgUpBtn').addEventListener('click',()=>$('imgFile').click());
+  $('imgFile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const img=new Image();
+    img.onload=()=>{const raw=imageToRaw(img);if(raw)handleQR(raw);else toast('没识别到二维码，请换清晰图片或手动录入');};img.src=URL.createObjectURL(f);e.target.value='';});
+  let scanning=false;
+  $('camBtn').addEventListener('click',async()=>{
+    if(typeof jsQR==='undefined'){toast('扫码库未加载（可能离线），请改用上传图片');return}
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast('当前浏览器不支持摄像头，请改用上传图片');return}
+    try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+      const v=$('video');v.srcObject=stream;v.style.display='block';await v.play();scanning=true;scanFrame();
+    }catch(err){toast('无法打开摄像头（可能被阻止或本地文件限制），请改用上传图片')}
+  });
+  function scanFrame(){
+    if(!scanning)return;
+    const v=$('video'),c=$('scanCanvas');
+    if(v.videoWidth){c.width=v.videoWidth;c.height=v.videoHeight;const ctx=c.getContext('2d');ctx.drawImage(v,0,0,c.width,c.height);
+      const d=ctx.getImageData(0,0,c.width,c.height);const r=jsQR(d.data,c.width,c.height);
+      if(r){scanning=false;if(v.srcObject)v.srcObject.getTracks().forEach(t=>t.stop());v.style.display='none';handleQR(r.data);return;}
+    }
+    requestAnimationFrame(scanFrame);
+  }
+
+  /* ---------- 电子税务局 Excel 导入 ---------- */
+  let xlsState=null;
+  function normHeader(h){ return String(h==null?'':h).trim().replace(/\s+/g,'').toLowerCase(); }
+  function detectColumns(headers){
+    const map={_used:new Set()};
+    const fields={
+      number:['数电发票号码','全电发票号码','电子发票号码','发票号码','发票代码','fphm','number','发票号'],
+      date:['开票日期','开具日期','日期','kprq','date'],
+      total:['价税合计','价税总额','价税金额','jshj'],
+      amount:['金额','不含税金额','金额不含税','bhsje','je'],
+      tax:['税额','se'],
+      rate:['税率','征收率','税率征收率','sl'],
+      seller:['销售方名称','销方名称','开票方名称','xfmc'],
+      buyer:['购买方名称','购方名称','受票方名称','gfmc'],
+      sellerId:['销售方纳税人识别号','销售方识别号','销方税号','xfsbh'],
+      buyerId:['购买方纳税人识别号','购方识别号','购方纳税人识别号','gfsbh'],
+      type:['发票票种','发票类型','票种','fpzl'],
+      status:['发票状态','状态','fpzt'],
+      category:['货物或应税劳务名称','应税劳务名称','货物名称','项目名称','商品名称'],
+      positive:['是否正数发票','是否正数','正数发票'],
+      origNumber:['原发票代码','原发票号码','对应发票','红字信息表编号','红字信息表','蓝字发票代码','蓝字发票号码','原票代码','原票号码','对应蓝票'],
+      payDate:['收款日期','付款日期','到账日期','收付款日期','收款日','付款日'],
+      dueDate:['约定收款日','约定付款日','约定收付款日','应收日期','应付日期','到期日'],
+      payCategory:['收款用途','付款用途','用途分类','收付款分类','收支分类'],
+      payNote:['收款备注','付款备注','收付款备注'],
+      remark:['备注','bz']
+    };
+    Object.keys(fields).forEach(f=>{
+      const kws=fields[f];
+      let idx;
+      if(f==='number'){
+        idx=headers.findIndex((h,i)=>{ if(map._used.has(i))return false; const nh=normHeader(h); return /数电发票号码|全电发票号码|电子发票号码|数电票号|全电票号/.test(nh); });
+        if(idx<0) idx=headers.findIndex((h,i)=>{ if(map._used.has(i))return false; const nh=normHeader(h); return kws.some(k=>nh.indexOf(k)>=0); });
+      } else {
+        idx=headers.findIndex((h,i)=>{ if(map._used.has(i))return false; const nh=normHeader(h); return kws.some(k=>nh.indexOf(k)>=0); });
+      }
+      if(idx>=0){ map[f]=idx; map._used.add(idx); }
+    });
+    delete map._used;
+    return map;
+  }
+  function normDate(s){
+    if(s==null||s==='')return '';
+    if(s instanceof Date) return s.toISOString().slice(0,10);
+    if(typeof s==='number'){
+      if(s>20000&&s<100000){ const d=new Date(Math.round((s-25569)*86400000)); return d.toISOString().slice(0,10); }
+      return '';
+    }
+    let t=String(s).trim(); if(t.indexOf(' ')>0)t=t.slice(0,10); t=t.replace(/\//g,'-');
+    if(/^\d{8}$/.test(t))t=t.slice(0,4)+'-'+t.slice(4,6)+'-'+t.slice(6,8);
+    if(/^\d{1,4}年/.test(t)){ const mm=t.match(/(\d{1,4})年(\d{1,2})月(\d{1,2})日?/); if(mm)t=mm[1]+'-'+('0'+mm[2]).slice(-2)+'-'+('0'+mm[3]).slice(-2); else t=t.replace(/年|月/g,'-').replace(/日/g,''); }
+    return t;
+  }
+  function num(v){ if(v==null)return 0; let s=String(v).replace(/[（(]/g,'-').replace(/[）)]/g,'').replace(/[^\d.\-]/g,''); const n=parseFloat(s); return isNaN(n)?0:n; }
+  function ratePct(v){ if(v==null)return 0; let s=String(v).trim().replace('%','').replace(/[^\d.\-]/g,''); if(!s||s==='***'||s==='免税'||s==='不征税')return 0; let n=parseFloat(s); if(isNaN(n))return 0; if(n>0&&n<1)n=n*100; return n; }
+  function buildXlsRows(){
+    const cfg=xlsState; if(!cfg)return [];
+    const m=cfg.map, rows=cfg.rows;
+    const rowLen=(cfg.headers||[]).length;
+    const strat=$('xlsStrategy').value;
+    const defCo=ensureCompany($('xlsCompany').value.trim()||(curCompany==='全部'?companies[0]:curCompany));
+    const defType=$('xlsType').value;
+    const out=[];
+    rows.forEach(r=>{
+      const row=r.slice(0,rowLen); while(row.length<rowLen)row.push('');
+      const g=i=>(i==null?null:row[i]);
+      const number=String(g(m.number)||'').trim();
+      const date=normDate(g(m.date));
+      const seller=String(g(m.seller)||'').trim();
+      const buyer=String(g(m.buyer)||'').trim();
+      const sellerId=String(g(m.sellerId)||'').trim();
+      const buyerId=String(g(m.buyerId)||'').trim();
+      const rawTotal=num(g(m.total)), rawAmount=num(g(m.amount)), rawTax=num(g(m.tax));
+      const rate=ratePct(g(m.rate));
+      const taxStatus=mapTaxStatus(g(m.status));
+      const origNumber=String(g(m.origNumber)||'').trim();
+      let amount=Math.abs(rawAmount), tax=Math.abs(rawTax), total=Math.abs(rawTotal);
+      if(total && rate){ amount=+(total/(1+rate/100)).toFixed(2); tax=+(total-amount).toFixed(2); }
+      else if(amount && tax){ total=+(amount+tax).toFixed(2); }
+      else if(amount && rate){ tax=+(amount*rate/100).toFixed(2); total=+(amount+tax).toFixed(2); }
+      else if(total && amount){ tax=+(total-amount).toFixed(2); }
+      else if(total){ amount=total; tax=rawTax; total=+(amount+(rawTax||0)).toFixed(2); }
+      if(!number || (amount===0 && total===0)) return;
+      let type=defType, company=defCo;
+      if(strat==='auto'){
+        const ms=companies.find(c=>seller&&(seller.indexOf(c)>=0||c.indexOf(seller)>=0));
+        const mb=companies.find(c=>buyer&&(buyer.indexOf(c)>=0||c.indexOf(buyer)>=0));
+        if(ms&&!mb){type='销项';company=ensureCompany(ms);}
+        else if(mb&&!ms){type='进项';company=ensureCompany(mb);}
+        else {type=defType;company=defCo;}
+      } else { type=strat; company=defCo; }
+      const party = type==='销项'?buyer:seller;
+      const catRaw = String(g(m.category!=null?m.category:m.type)||'').trim();
+      const cat = catRaw||(type==='销项'?'销售收入':'采购进货');
+      const positive = String(g(m.positive)||'').trim();
+      let finalTax=taxStatus;
+      if(positive==='否' && finalTax==='正常') finalTax='红字';
+      out.push({type,number,date,party,
+        category:cat,
+        rate, amount, tax, total:+(amount+tax).toFixed(2),
+        status:'待处理', taxStatus:finalTax, origNumber, remark:'', company,
+        taxId: type==='销项'?sellerId:buyerId,
+        received:0, reimburseDeadline:normDate(g(m.dueDate)), reimbursedAt:normDate(g(m.payDate)),
+        payDate:normDate(g(m.payDate)), dueDate:normDate(g(m.dueDate)),
+        payCategory:String(g(m.payCategory)||'').trim(), payNote:String(g(m.payNote)||'').trim()});
+    });
+    return out;
+  }
+  $('xlsUpBtn').addEventListener('click',()=>$('xlsFile').click());
+  $('xlsFile').addEventListener('change',e=>{
+    const f=e.target.files[0]; if(!f)return;
+    if(typeof XLSX==='undefined'){toast('Excel 解析库未加载（可能离线），请联网后重试，或改用 CSV');e.target.value='';return;}
+    const rd=new FileReader();
+    rd.onload=()=>{
+      try{
+        const wb=XLSX.read(rd.result,{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+        let hRow=0;
+        for(let i=0;i<Math.min(data.length,15);i++){ if(data[i]&&data[i].some(c=>/发票号码|发票代码|号码|fp/.test(String(c)))){hRow=i;break;} }
+        const headers=(data[hRow]||[]).map(h=>String(h==null?'':h).trim());
+        const map=detectColumns(headers);
+        const rows=data.slice(hRow+1).filter(r=>Array.isArray(r)&&r.some(c=>String(c).trim()!==''));
+        xlsState={map,rows,headers};
+        const recognized=Object.keys(map);
+        const allFields=['number','date','total','amount','tax','rate','seller','buyer','sellerId','buyerId','type','status','category','positive','remark'];
+        const missing=allFields.filter(f=>map[f]==null);
+        const sample=rows[0]||[];
+        const sc=i=>sample[i]==null||sample[i]===''?'(空)':String(sample[i]).slice(0,15);
+        const sampleTxt=(map.number!=null?'发票号码['+sc(map.number)+'] ':'')+
+          (map.amount!=null?'金额['+sc(map.amount)+'] ':'')+
+          (map.total!=null?'价税合计['+sc(map.total)+'] ':'')+
+          (map.tax!=null?'税额['+sc(map.tax)+'] ':'')+
+          (map.rate!=null?'税率['+sc(map.rate)+']':'');
+        $('xlsMapping').innerHTML='已读取 <b>'+rows.length+'</b> 行数据。已识别列：'+recognized.map(f=>f+'（第'+(map[f]+1)+'列）').join('、')+
+          (missing.length?'<br>未识别列：'+missing.join('、')+'（不影响导入，缺失项将留空或推算）':'')+
+          (sampleTxt?'<br><b>首行样本：</b>'+sampleTxt:'');
+        $('xlsCompany').value=curCompany==='全部'?companies[0]:curCompany;
+        $('xlsConfig').style.display='block';
+        toast('已读取，请选择导入方式后点「解析并预览」');
+      }catch(err){ toast('Excel 解析失败：'+(err.message||err)); }
+      e.target.value='';
+    };
+    rd.readAsArrayBuffer(f);
+  });
+  $('xlsParseBtn').addEventListener('click',()=>{
+    const rows=buildXlsRows();
+    if(!rows.length){
+      let diag='';
+      const cfg=xlsState;
+      if(cfg&&cfg.map){
+        const m=cfg.map;
+        diag=cfg.rows.slice(0,3).map((r,i)=>{
+          const cell=i=>r[i]==null||r[i]===''?'(空)':String(r[i]).slice(0,12);
+          return '第'+(i+1)+'行: 号码['+(m.number!=null?cell(m.number):'(未识别)')+'] 金额['+(m.amount!=null?cell(m.amount):'(未识别)')+'] 价税合计['+(m.total!=null?cell(m.total):'(未识别)')+']';
+        }).join(' ｜ ');
+        $('xlsMapping').innerHTML+='<br><b style="color:var(--warn)">解析结果：0 行可导入。检查到：'+diag+'</b>';
+      }
+      toast('没有可导入的有效数据（需有发票号码和金额）。'+(diag?'检查到：'+diag:''));
+      return;
+    }
+    ingest(rows);
+    $('xlsConfig').style.display='none';
+    if(document.getElementById('parsePreview'))document.getElementById('parsePreview').scrollIntoView({behavior:'smooth'});
+  });
+
+  /* ---------- 记账台账 ---------- */
+  const LKEY='ledger_records_v1';
+  let ledger=loadLedger();let lEditingId=null;
+  ledger.forEach(r=>{if(!r.company)r.company=companies[0];});
+  function loadLedger(){try{return JSON.parse(localStorage.getItem(LKEY))||[]}catch(e){return[]}}
+  function saveLedger(){localStorage.setItem(LKEY,JSON.stringify(ledger))}
+  const L_INCOME=['销售收款','服务收入','利息收入','其他收入'];
+  const L_EXPENSE=['采购付款','工资薪金','社保公积金','房租','办公费','交通费','差旅费','业务招待费','税费','其他支出'];
+  function fillLCategory(){const t=document.querySelector('input[name=lio]:checked').value;
+    const defs=t==='收入'?L_INCOME:L_EXPENSE;
+    const used=[...new Set(ledger.filter(r=>r.type===t).map(r=>r.category).filter(Boolean))];
+    const all=[...new Set([...defs,...used])];
+    $('lCatList').innerHTML=all.map(c=>`<option value="${escapeHtml(c)}">`).join('');}
+  function fillLPartyList(){
+    const used=[...new Set(curFilter(ledger).map(r=>r.party).filter(Boolean))];
+    $('lPartyList').innerHTML=used.map(c=>`<option value="${escapeHtml(c)}">`).join('');
+  }
+  function resetLedgerForm(){lEditingId=null;$('lFormTitle').textContent='记一笔收支';
+    $('lDate').value=new Date().toISOString().slice(0,10);
+    document.querySelector('input[name=lio][value=收入]').checked=true;
+    $('lAccount').value='银行账户';fillLCategory();
+    $('lCompany').value=curCompany==='全部'?companies[0]:curCompany;
+    $('lParty').value='';$('lAmount').value='';$('lInvoice').value='';$('lRemark').value='';
+    $('lCancel').style.display='none';}
+  document.querySelectorAll('input[name=lio]').forEach(r=>r.addEventListener('change',fillLCategory));
+  $('lReset').addEventListener('click',resetLedgerForm);
+  $('lCancel').addEventListener('click',resetLedgerForm);
+  $('lSave').addEventListener('click',()=>{
+    const type=document.querySelector('input[name=lio]:checked').value;
+    const amt=parseFloat($('lAmount').value)||0;
+    if(!amt){toast('请填写金额');return}
+    const rec={id:lEditingId||('l'+Date.now()+Math.random().toString(36).slice(2,6)),
+      date:$('lDate').value,type,account:$('lAccount').value,category:$('lCategory').value,
+      party:$('lParty').value.trim(),amount:amt,invoice:$('lInvoice').value.trim(),remark:$('lRemark').value.trim(),
+      company:ensureCompany($('lCompany').value),
+      createdAt:lEditingId?(ledger.find(x=>x.id===lEditingId).createdAt):Date.now()};
+    if(lEditingId){const i=ledger.findIndex(x=>x.id===lEditingId);ledger[i]=rec;toast('已更新')}
+    else{ledger.push(rec);toast('已保存')}
+    saveLedger();resetLedgerForm();renderLedger();
+  });
+  function renderLedger(){
+    const allL=curFilter(ledger);
+    const inc=allL.filter(r=>r.type==='收入'),exp=allL.filter(r=>r.type==='支出');
+    const sum=a=>a.reduce((s,x)=>s+(x.amount||0),0);
+    const inAmt=sum(inc),outAmt=sum(exp);
+    $('lIn').textContent=money(inAmt);$('lOut').textContent=money(outAmt);
+    $('lNet').textContent=money(inAmt-outAmt);$('lCount').textContent=ledger.length;
+    const accs=['银行账户','现金','微信','支付宝'];const bal={};accs.forEach(a=>bal[a]=0);
+    curFilter(ledger).forEach(r=>{bal[r.account]=(bal[r.account]||0)+(r.type==='收入'?r.amount:-r.amount)});
+    $('lBalances').innerHTML=accs.map(a=>`<div class="card"><div class="t">${a}</div><div class="v" style="color:var(--brand)">${money(bal[a])}</div></div>`).join('');
+    fillLPartyList();
+    renderLChart();renderLList();
+  }
+  function renderLChart(){
+    const map={};ledger.forEach(r=>{const m=(r.date||'').slice(0,7);if(!m)return;map[m]=map[m]||{i:0,o:0};map[m][r.type==='收入'?'i':'o']+=(r.amount||0);});
+    const months=Object.keys(map).sort().slice(-8);
+    const el=$('lChart');
+    if(typeof echarts==='undefined'){el.innerHTML='<div class="empty">图表组件加载中，请联网后刷新</div>';return;}
+    if(!chartL)chartL=echarts.init(el);else chartL.resize();
+    chartL.setOption({
+      color:['#13c2c2','#f5222d'],
+      grid:{left:64,right:18,top:40,bottom:26},
+      legend:{data:['收入','支出'],top:6,textStyle:{color:'#6b7280',fontSize:12}},
+      tooltip:{trigger:'axis',axisPointer:{type:'shadow'},valueFormatter:v=>'¥'+fmt(Math.round(v||0))},
+      xAxis:{type:'category',data:months.map(m=>m.slice(5)+'月'),axisTick:{show:false},axisLine:{lineStyle:{color:'#e4e6eb'}},axisLabel:{color:'#8a9099'}},
+      yAxis:{type:'value',splitLine:{lineStyle:{color:'#f0f1f4'}},axisLabel:{color:'#8a9099',formatter:v=>v>=10000?(v/10000)+'万':v}},
+      series:[
+        {name:'收入',type:'bar',data:months.map(m=>Math.round(map[m].i||0)),barWidth:'30%',itemStyle:{color:'#13c2c2',borderRadius:[6,6,0,0]}},
+        {name:'支出',type:'bar',data:months.map(m=>Math.round(map[m].o||0)),barWidth:'30%',itemStyle:{color:'#f5222d',borderRadius:[6,6,0,0]}}
+      ]
+    },true);
+  }
+  function lFilters(){const io=$('lfIO').value,acc=$('lfAccount').value,f=$('lfFrom').value,to=$('lfTo').value,kw=$('lfKw').value.trim().toLowerCase();
+    return curFilter(ledger).filter(r=>{if(io&&r.type!==io)return false;if(acc&&r.account!==acc)return false;
+      if(f&&r.date&&r.date<f)return false;if(to&&r.date&&r.date>to)return false;
+      if(kw&&!(r.party+r.remark+r.invoice).toLowerCase().includes(kw))return false;return true;});}
+  function renderLList(){const t=lFilters();const tb=$('ltbody');
+    if(!t.length){tb.innerHTML='<tr><td colspan="9" class="empty">没有符合条件的记录</td></tr>';return}
+    tb.innerHTML=t.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(r=>{
+      return `<tr><td>${r.date||''}</td><td><span class="tag ${r.type==='收入'?'in':'out'}">${r.type}</span></td>
+        <td>${r.account}</td><td>${r.category}</td><td>${escapeHtml(r.party)}</td>
+        <td class="num">${fmt(r.amount)}</td><td>${r.invoice||''}</td><td>${escapeHtml(r.remark)}</td>
+        <td><button class="btn ghost sm" data-ledit="${r.id}">编辑</button>
+            <button class="btn danger sm" data-ldel="${r.id}">删除</button></td></tr>`;
+    }).join('');
+    tb.querySelectorAll('[data-ledit]').forEach(b=>b.onclick=()=>editLedger(b.dataset.ledit));
+    tb.querySelectorAll('[data-ldel]').forEach(b=>b.onclick=()=>delLedger(b.dataset.ldel));
+  }
+  ['lfIO','lfAccount','lfFrom','lfTo','lfKw'].forEach(id=>$(id).addEventListener('input',renderLList));
+  $('lfReset').addEventListener('click',()=>{['lfIO','lfAccount','lfFrom','lfTo','lfKw'].forEach(i=>$(i).value='');renderLList()});
+  function editLedger(id){const r=ledger.find(x=>x.id===id);if(!r)return;
+    lEditingId=id;$('lFormTitle').textContent='编辑记录';
+    document.querySelector(`input[name=lio][value="${r.type}"]`).checked=true;
+    $('lDate').value=r.date;$('lAccount').value=r.account;fillLCategory();$('lCategory').value=r.category;
+    $('lParty').value=r.party;$('lAmount').value=r.amount;$('lInvoice').value=r.invoice;$('lRemark').value=r.remark;
+    $('lCompany').value=r.company||companies[0];
+    $('lCancel').style.display='inline-block';document.querySelector('nav button[data-view=ledger]').click();}
+  function delLedger(id){if(!confirm('确定删除这条记录？'))return;
+    ledger=ledger.filter(x=>x.id!==id);saveLedger();toast('已删除');renderLedger();}
+  function addFromInvoice(rec){const type=rec.type==='销项'?'收入':'支出';
+    const r={id:'l'+Date.now()+Math.random().toString(36).slice(2,6),date:rec.date,type,account:'银行账户',
+      category:rec.type==='销项'?'销售收款':'采购付款',party:rec.party,amount:rec.total,invoice:rec.number,
+      remark:'来自发票 '+rec.number,createdAt:Date.now()};
+    ledger.push(r);saveLedger();
+    if(rec.type==='销项'){
+      const i=records.findIndex(x=>x.id===rec.id);
+      if(i>=0){records[i].received=(Number(records[i].received)||0)+rec.total;save();}
+      toast('已生成收款记录并计入「已收货款」');
+    }else{
+      toast('已生成付款记录（供应商付款，与付款跟踪分开记录）');
+    }
+    renderLedger();renderList();if(typeof renderTrack==='function')renderTrack();
+  }
+
+  /* ---------- 记账台账：批量导入 ---------- */
+  const L_ACCOUNTS=['银行账户','现金','微信','支付宝'];
+  let lStaging=[];
+  function parseLedgerLines(text){
+    const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    const out=[];
+    lines.forEach(line=>{
+      let cols=line.includes('\t')?line.split('\t'):line.split(',');
+      cols=cols.map(c=>c.trim());
+      if(cols.length<6)return;                 // 至少需要 日期,收/支,账户,类别,对方,金额
+      const date=cols[0]||'';
+      let type=cols[1];if(type!=='收入'&&type!=='支出')type='支出';
+      let account=cols[2]||'银行账户';
+      const am=cols[5];const amount=parseFloat(am)||0;
+      if(!date||!amount)return;                // 日期和金额必填且金额>0
+      const m=L_ACCOUNTS.find(a=>account.includes(a));account=m||'银行账户';
+      const category=cols[3]||'',party=cols[4]||'',invoice=cols[6]||'',remark=cols[7]||'';
+      out.push({date,type,account,category,party,amount,invoice,remark,company:($('lCompany').value.trim()||companies[0])});
+    });
+    return out;
+  }
+  function renderLedgerPreview(){
+    if(!lStaging.length){$('lParsePreview').innerHTML='';return;}
+    const tb=lStaging.map(r=>`<tr><td>${r.date}</td><td><span class="tag ${r.type==='收入'?'in':'out'}">${r.type}</span></td>
+      <td>${escapeHtml(r.company||'')}</td><td>${escapeHtml(r.account)}</td><td>${escapeHtml(r.category)}</td><td>${escapeHtml(r.party)}</td>
+      <td class="num">${fmt(r.amount)}</td><td>${r.invoice||''}</td><td>${escapeHtml(r.remark)}</td></tr>`).join('');
+    const cnt=lStaging.length;
+    $('lParsePreview').innerHTML=`<div class="tablewrap" style="margin-bottom:10px"><table>
+      <thead><tr><th>日期</th><th>收/支</th><th>公司</th><th>账户</th><th>类别</th><th>对方</th><th class="num">金额</th><th>关联发票</th><th>备注</th></tr></thead>
+      <tbody>${tb}</tbody></table></div>
+      <button class="btn" id="lConfirmBatch">确认导入 ${cnt} 条</button>`;
+    $('lConfirmBatch').onclick=()=>{
+      ledger=ledger.concat(lStaging.map(r=>({id:'l'+Date.now()+Math.random().toString(36).slice(2,6),createdAt:Date.now(),...r})));
+      saveLedger();lStaging=[];renderLedgerPreview();toast('已导入 '+cnt+' 条');renderLedger();
+    };
+  }
+  function ingestLedger(rows){ if(!rows||!rows.length){toast('没有可导入的数据');return;}
+    rows.forEach(r=>{ r.company=ensureCompany(r.company||companies[0]); });
+    lStaging=lStaging.concat(rows); renderLedgerPreview(); }
+  $('lParseBtn').addEventListener('click',()=>{ ingestLedger(parseLedgerLines($('lPasteBox').value)); });
+  $('lClearPaste').addEventListener('click',()=>{$('lPasteBox').value='';lStaging=[];renderLedgerPreview();});
+  $('lTplBtn').addEventListener('click',()=>{
+    $('lPasteBox').value='2026-08-01,收入,银行账户,销售收款,示例科技有限公司,10600,24417000000111111111,货款\n'+
+      '2026-08-02,支出,银行账户,工资薪金,张三,8000,,8月工资\n'+
+      '2026-08-03,支出,微信,办公费,文具店,380,,买打印纸\n'+
+      '2026-08-04,支出,现金,差旅费,李四,1200,,出差打车';
+    toast('已填入示例，可直接修改');
+  });
+  $('lCsvUpBtn').addEventListener('click',()=>$('lCsvFile').click());
+  $('lCsvFile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>ingestLedger(parseLedgerLines(t)));e.target.value='';});
+
+  /* ---------- 飞书同步包导出 ---------- */
+  $('syncFeishu').addEventListener('click',()=>{
+    const pkg={exportedAt:new Date().toISOString(),invoices:records,ledger:ledger};
+    download('财务同步包_'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(pkg,null,2),'application/json');
+    toast('已导出同步包，发给我即可推送飞书');
+  });
+
+  /* ---------- 公司管理（弹窗） ---------- */
+  function openCompanyModal(){$('cmpModalNew').value='';renderCmpModal();$('cmpModal').style.display='flex';}
+  function closeCompanyModal(){$('cmpModal').style.display='none';}
+  function renderCmpModal(){
+    $('cmpModalList').innerHTML=companies.map((c,i)=>`<div style="display:flex;gap:8px;margin:6px 0;align-items:center">
+      <input class="cmpMName" data-i="${i}" data-old="${escapeHtml(c)}" value="${escapeHtml(c)}" style="flex:1;padding:8px;border:1px solid var(--line);border-radius:8px">
+      <button class="btn danger sm cmpMDel" data-i="${i}" ${companies.length<=1?'disabled':''} type="button">删除</button></div>`).join('');
+    $('cmpModalList').querySelectorAll('.cmpMDel').forEach(b=>b.onclick=()=>{
+      const i=+b.dataset.i;if(companies.length<=1){toast('至少保留一家公司');return;}
+      if(!confirm('删除「'+companies[i]+'」？其所有发票与台账将并入「'+companies[0]+'」。'))return;
+      const target=companies[0];
+      records.forEach(r=>{if(r.company===companies[i])r.company=target;});
+      ledger.forEach(r=>{if(r.company===companies[i])r.company=target;});
+      companies.splice(i,1);saveCompanies();save();saveLedger();
+      renderCmpModal();fillCompanySel();fillCompanyOptions();renderAll();toast('已删除公司');
+    });
+  }
+  $('cmpModalClose').onclick=closeCompanyModal;
+  $('cmpModalCancel').onclick=closeCompanyModal;
+  $('cmpModal').addEventListener('click',e=>{if(e.target===$('cmpModal'))closeCompanyModal();});
+  $('cmpOpenFromData').addEventListener('click',openCompanyModal);
+  document.querySelectorAll('input[name=tp]').forEach(r=>r.addEventListener('change',()=>{ localStorage.setItem('TAXP',r.value); toast('纳税人类型：'+r.value); renderOverview(); }));
+  document.querySelectorAll('.cmpEditBtn').forEach(b=>b.addEventListener('click',openCompanyModal));
+  $('cmpModalAdd').addEventListener('click',()=>{
+    const n=$('cmpModalNew').value.trim();if(!n){toast('请输入公司名');return;}
+    if(companies.includes(n)){toast('公司已存在');return;}
+    companies.push(n);saveCompanies();$('cmpModalNew').value='';renderCmpModal();fillCompanySel();fillCompanyOptions();toast('已新增公司');
+  });
+  $('cmpModalSave').addEventListener('click',()=>{
+    let changed=false;
+    document.querySelectorAll('.cmpMName').forEach(inp=>{
+      const i=+inp.dataset.i, oldN=inp.dataset.old, newN=inp.value.trim();
+      if(oldN!==newN&&newN){
+        if(newN!==oldN&&companies.includes(newN)){toast('名称「'+newN+'」已存在');return;}
+        records.forEach(r=>{if(r.company===oldN)r.company=newN;});
+        ledger.forEach(r=>{if(r.company===oldN)r.company=newN;});
+        companies[i]=newN;changed=true;
+      }
+    });
+    if(changed){saveCompanies();fillCompanySel();fillCompanyOptions();renderAll();toast('已保存公司名');}
+    closeCompanyModal();
+  });
+
+  /* ---------- 初始化 ---------- */
+  if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+  setupDrop();
+  fillCompanySel();fillCompanyOptions();fillPayNoteList();
+  if($('qCompany'))$('qCompany').value=curCompany==='全部'?companies[0]:curCompany;
+  window.addEventListener('resize',()=>{try{if(chartO)chartO.resize();if(chartL)chartL.resize();}catch(e){}});
+  document.addEventListener('click',e=>{const h=e.target.closest('.hint');if(h&&!h.closest('.modal'))h.classList.toggle('folded');});
+  resetForm();resetLedgerForm();renderOverview();renderLedger();renderTrack();
+})();
+(function checkUpdate(){
+  var APP_VERSION='v17';
+  try{
+    fetch(location.pathname+'?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(t){
+      var m=t.match(/版本 v(\d+)/);
+      var cur=parseInt(APP_VERSION.replace('v',''),10);
+      if(m&&parseInt(m[1],10)>cur){
+        var bar=document.createElement('div');
+        bar.style.cssText='position:fixed;top:0;left:0;right:0;background:#1677ff;color:#fff;text-align:center;padding:11px;font-size:13.5px;font-weight:600;z-index:999;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.15)';
+        bar.textContent='检测到新版本 v'+m[1]+'，点此立即刷新（数据不受影响）';
+        bar.onclick=function(){location.href=location.pathname+'?v='+m[1];};
+        document.body.appendChild(bar);
+      }
+    }).catch(function(){});
+  }catch(e){}
+})();
+</script>
+<div style="position:fixed;right:10px;bottom:8px;font-size:11px;color:var(--muted);opacity:.75;z-index:999">版本 v17（2026-08-20 23:35）</div>
+</body>
+</html>
