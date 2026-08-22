@@ -1161,8 +1161,25 @@ $('companyManageBtn').addEventListener('click',openCompanyModal);
   $('impJson').addEventListener('click',()=>$('fileInput').click());
   $('fileInput').addEventListener('change',e=>{
     const f=e.target.files[0];if(!f)return;const rd=new FileReader();
-    rd.onload=()=>{try{const d=JSON.parse(rd.result);if(!Array.isArray(d))throw 0;
-      if(confirm('导入将追加到现有数据，确定？')){records=records.concat(d);save();toast('已导入 '+d.length+' 条');renderOverview();renderList()}}
+    rd.onload=()=>{try{
+      const d=JSON.parse(rd.result);if(!Array.isArray(d))throw 0;
+      let add=0,upd=0,dup=0;const todo=[];
+      const byId=new Map(records.map(r=>[r.id,r]));
+      d.forEach(x=>{
+        if(!x||!x.id){add++;todo.push({type:'add',rec:x});return;}
+        const old=byId.get(x.id);
+        if(!old){add++;todo.push({type:'add',rec:x});}
+        else if(JSON.stringify(old)===JSON.stringify(x)){dup++;}
+        else{upd++;todo.push({type:'upd',rec:x});}
+      });
+      if(!todo.length){toast('没有需要导入的数据（全部与现有重复）');$('fileInput').value='';return;}
+      if(!confirm('导入 '+(add+upd+dup)+' 条：新增 '+add+'、更新 '+upd+'、跳过重复 '+dup+'。确定？')){$('fileInput').value='';return;}
+      todo.forEach(t=>{
+        if(t.type==='add')records.push(t.rec);
+        else{const i=records.findIndex(r=>r.id===t.rec.id);if(i>=0)records[i]=t.rec;}
+      });
+      save();toast('已导入：新增 '+add+'、更新 '+upd+'、跳过重复 '+dup);renderOverview();renderList()
+    }
       catch(_){toast('文件格式不正确')};
       $('fileInput').value='';};
     rd.readAsText(f);
@@ -1739,7 +1756,7 @@ $('companyManageBtn').addEventListener('click',openCompanyModal);
   resetForm();resetLedgerForm();renderOverview();renderLedger();renderTrack();
 })();
 (function checkUpdate(){
-  var APP_VERSION='v19';
+  var APP_VERSION='v20';
   try{
     fetch(location.pathname+'?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(t){
       var m=t.match(/版本 v(\d+)/);
@@ -1755,6 +1772,6 @@ $('companyManageBtn').addEventListener('click',openCompanyModal);
   }catch(e){}
 })();
 </script>
-<div style="position:fixed;right:10px;bottom:8px;font-size:11px;color:var(--muted);opacity:.75;z-index:999">版本 v19（2026-08-23 00:15）</div>
+<div style="position:fixed;right:10px;bottom:8px;font-size:11px;color:var(--muted);opacity:.75;z-index:999">版本 v20（2026-08-23 00:25）</div>
 </body>
 </html>
