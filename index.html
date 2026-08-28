@@ -809,7 +809,10 @@ $('companyManageBtn').addEventListener('click',openCompanyModal);
     if(/红字|负数/.test(t))return '红字';
     return '正常';
   }
-  function markRed(){ records.forEach(r=>{ if(r.taxStatus==='红字'&&r.origNumber){ const t=records.find(x=>x.number===r.origNumber&&(x.taxStatus||'正常')==='正常'); if(t)t.taxStatus='已红冲'; } }); }
+  function markRed(){ records.forEach(r=>{ if(r.taxStatus!=='红字')return;
+    if(r.origNumber){ const t=records.find(x=>x.number===r.origNumber&&(x.taxStatus||'正常')==='正常'); if(t){t.taxStatus='已红冲';return;} }
+    const t2=records.find(x=>x.type===r.type&&x.company===r.company&&(x.taxStatus||'正常')==='正常'&&Math.abs((x.total||0)-(r.total||0))<0.005);
+    if(t2)t2.taxStatus='已红冲'; }); }
 
   /* ---------- 概览 ---------- */
   function renderOverview(){
@@ -1239,8 +1242,13 @@ $('companyManageBtn').addEventListener('click',openCompanyModal);
       <tbody>${tb}</tbody></table></div>
       <button class="btn" id="confirmBatch">确认导入 ${rows.length} 条</button>`;
     $('confirmBatch').onclick=()=>{
-      records=records.concat(rows.map(r=>({id:'i'+Date.now()+Math.random().toString(36).slice(2,6),createdAt:Date.now(),...r})));
-      markRed();save();staging=[];renderPreview();toast('已导入 '+rows.length+' 条');renderOverview();renderList();
+      const seen=new Set(records.map(r=>r.type+'|'+r.number));
+      const fresh=[],dups=[];
+      rows.forEach(r=>{const k=r.type+'|'+r.number; if(seen.has(k)){dups.push(r);return;} seen.add(k);fresh.push(r);});
+      records=records.concat(fresh.map(r=>({id:'i'+Date.now()+Math.random().toString(36).slice(2,6),createdAt:Date.now(),...r})));
+      markRed();save();staging=[];renderPreview();
+      toast('已导入 '+fresh.length+' 条'+(dups.length?'，跳过重复 '+dups.length+' 条':''));
+      renderOverview();renderList();
     };
   }
   function ingest(rows){ if(!rows||!rows.length){toast('没有可导入的数据');return;}
@@ -1454,7 +1462,7 @@ $('companyManageBtn').addEventListener('click',openCompanyModal);
         const mb=companies.find(c=>buyer&&(buyer.indexOf(c)>=0||c.indexOf(buyer)>=0));
         if(ms&&!mb){type='销项';company=ensureCompany(ms);}
         else if(mb&&!ms){type='进项';company=ensureCompany(mb);}
-        else {type=defType;company=defCo;}
+        else {type=defType;company=defCo;cfg.guessed=(cfg.guessed||0)+1;}
       } else { type=strat; company=defCo; }
       const party = type==='销项'?buyer:seller;
       const catRaw = String(g(m.category!=null?m.category:m.type)||'').trim();
@@ -1462,6 +1470,7 @@ $('companyManageBtn').addEventListener('click',openCompanyModal);
       const positive = String(g(m.positive)||'').trim();
       let finalTax=taxStatus;
       if(positive==='否' && finalTax==='正常') finalTax='红字';
+      if(finalTax==='正常' && (rawTotal<0||rawAmount<0)) finalTax='红字';
       out.push({type,number,date,party,
         category:cat,
         rate, amount, tax, total:+(amount+tax).toFixed(2),
@@ -1512,6 +1521,7 @@ $('companyManageBtn').addEventListener('click',openCompanyModal);
   });
   $('xlsParseBtn').addEventListener('click',()=>{
     const rows=buildXlsRows();
+    if(xlsState&&xlsState.guessed){toast('有 '+xlsState.guessed+' 行未能按购/销方名称判断进销项，已按页面默认设置处理，导入后请抽查');xlsState.guessed=0;}
     if(!rows.length){
       let diag='';
       const cfg=xlsState;
@@ -1756,7 +1766,7 @@ $('companyManageBtn').addEventListener('click',openCompanyModal);
   resetForm();resetLedgerForm();renderOverview();renderLedger();renderTrack();
 })();
 (function checkUpdate(){
-  var APP_VERSION='v22';
+  var APP_VERSION='v23';
   try{
     fetch(location.pathname+'?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(t){
       var m=t.match(/版本 v(\d+)/);
@@ -1772,6 +1782,6 @@ $('companyManageBtn').addEventListener('click',openCompanyModal);
   }catch(e){}
 })();
 </script>
-<div style="position:fixed;right:10px;bottom:8px;font-size:11px;color:var(--muted);opacity:.75;z-index:999">版本 v22（2026-08-23 00:40）</div>
+<div style="position:fixed;right:10px;bottom:8px;font-size:11px;color:var(--muted);opacity:.75;z-index:999">版本 v23（2026-08-29 修复：导入查重/红字兜底/方向提示/红冲自动配对）</div>
 </body>
 </html>
